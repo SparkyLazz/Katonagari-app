@@ -11,7 +11,26 @@ import '../../../data/database/app_database.dart';
 import 'set_budget_sheet.dart';
 import '../../../core/widgets/month_picker_sheet.dart';
 
-// ── Main Screen ──────────────────────────────────────────────────────────────
+// ── Previous-month category spending provider ─────────────────────────────────
+// Returns a map of categoryId → amount for the month BEFORE selectedMonth.
+final _prevMonthCategoryProvider =
+StreamProvider<Map<String, double>>((ref) {
+  final selected = ref.watch(selectedMonthProvider);
+  final prev     = DateTime(selected.year, selected.month - 1);
+  final repo     = ref.watch(transactionRepoProvider);
+  return repo
+      .watchWithCategoryByMonth(prev.month, prev.year)
+      .map((items) {
+    final map = <String, double>{};
+    for (final i in items.where((t) => t.transaction.type == 'EXPENSE')) {
+      final key = i.category.name; // match by name (categories are consistent)
+      map[key] = (map[key] ?? 0) + i.transaction.amount;
+    }
+    return map;
+  });
+});
+
+
 class InsightsScreen extends ConsumerStatefulWidget {
   const InsightsScreen({super.key});
 
@@ -32,11 +51,11 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen>
   void initState() {
     super.initState();
     Future.delayed(const Duration(milliseconds: 150),
-        () { if (mounted) setState(() => _phase = 1); });
+            () { if (mounted) setState(() => _phase = 1); });
     Future.delayed(const Duration(milliseconds: 300),
-        () { if (mounted) setState(() => _phase = 2); });
+            () { if (mounted) setState(() => _phase = 2); });
     Future.delayed(const Duration(milliseconds: 500),
-        () { if (mounted) setState(() => _phase = 3); });
+            () { if (mounted) setState(() => _phase = 3); });
   }
 
   @override
@@ -53,9 +72,9 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen>
                 duration: const Duration(milliseconds: 300),
                 child: _view == 'spending'
                     ? _SpendingView(
-                        key: const ValueKey('spending'), phase: _phase)
+                    key: const ValueKey('spending'), phase: _phase)
                     : _BudgetsView(
-                        key: const ValueKey('budgets'), phase: _phase),
+                    key: const ValueKey('budgets'), phase: _phase),
               ),
             ),
           ],
@@ -145,11 +164,11 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen>
                         _view  = v['id'] as String;
                         _phase = 0;
                         Future.delayed(const Duration(milliseconds: 100),
-                            () { if (mounted) setState(() => _phase = 1); });
+                                () { if (mounted) setState(() => _phase = 1); });
                         Future.delayed(const Duration(milliseconds: 250),
-                            () { if (mounted) setState(() => _phase = 2); });
+                                () { if (mounted) setState(() => _phase = 2); });
                         Future.delayed(const Duration(milliseconds: 450),
-                            () { if (mounted) setState(() => _phase = 3); });
+                                () { if (mounted) setState(() => _phase = 3); });
                       }),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
@@ -203,12 +222,15 @@ class _SpendingView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final dataAsync = ref.watch(insightsSpendingProvider);
-    final data      = dataAsync.valueOrNull;
-    final cur       = ref.currency; // ← read once, passed everywhere
+    final dataAsync     = ref.watch(insightsSpendingProvider);
+    final prevAsync     = ref.watch(_prevMonthCategoryProvider);
+    final data          = dataAsync.valueOrNull;
+    final prevCatMap    = prevAsync.valueOrNull ?? {};
+    final cur           = ref.currency;
+    final selectedMonth = ref.watch(selectedMonthProvider);
 
     if (data == null) {
-      return const Center(
+      return Center(
         child: CircularProgressIndicator(color: AppColors.accent),
       );
     }
@@ -247,6 +269,22 @@ class _SpendingView extends ConsumerWidget {
           _buildTop3(phase, data, cur),
           const SizedBox(height: 14),
         ],
+        _SpendingByCategoryTable(
+          phase: phase,
+          categoryStats: data.categoryStats,
+          prevCatMap: prevCatMap,
+          cur: cur,
+          selectedMonth: selectedMonth,
+        ),
+        const SizedBox(height: 14),
+        _BiggestMoversTable(
+          phase: phase,
+          categoryStats: data.categoryStats,
+          prevCatMap: prevCatMap,
+          cur: cur,
+          selectedMonth: selectedMonth,
+        ),
+        const SizedBox(height: 14),
         _SpendingChart(visible: phase >= 3, daily: data.dailyExpense, cur: cur),
         const SizedBox(height: 14),
         _buildAverages(phase, data, cur),
@@ -303,8 +341,8 @@ class _SpendingView extends ConsumerWidget {
                   decoration: BoxDecoration(
                     color: s['bg'] as Color,
                     border: i < 2
-                        ? const Border(
-                            right: BorderSide(color: AppColors.border))
+                        ? Border(
+                        right: BorderSide(color: AppColors.border))
                         : null,
                   ),
                   child: Column(
@@ -339,7 +377,7 @@ class _SpendingView extends ConsumerWidget {
   // ── Insight Card ───────────────────────────────────────────────────────────
   Widget _buildInsight(int phase, InsightsSpendingData data, CurrencyInfo cur) {
     final topCat =
-        data.categoryStats.isNotEmpty ? data.categoryStats.first : null;
+    data.categoryStats.isNotEmpty ? data.categoryStats.first : null;
 
     return AnimatedOpacity(
       opacity:  phase >= 1 ? 1 : 0,
@@ -523,8 +561,8 @@ class _SpendingView extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(vertical: 9),
                 decoration: BoxDecoration(
                   border: i > 0
-                      ? const Border(
-                          top: BorderSide(color: AppColors.border))
+                      ? Border(
+                      top: BorderSide(color: AppColors.border))
                       : null,
                 ),
                 child: Row(
@@ -640,7 +678,459 @@ class _SpendingView extends ConsumerWidget {
   }
 }
 
-// ── Avg Card ──────────────────────────────────────────────────────────────────
+// ── Spending by Category Table ────────────────────────────────────────────────
+class _SpendingByCategoryTable extends StatelessWidget {
+  final int              phase;
+  final List<CategoryStat> categoryStats;
+  final Map<String, double> prevCatMap;
+  final CurrencyInfo     cur;
+  final DateTime         selectedMonth;
+
+  const _SpendingByCategoryTable({
+    required this.phase,
+    required this.categoryStats,
+    required this.prevCatMap,
+    required this.cur,
+    required this.selectedMonth,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (categoryStats.isEmpty) return const SizedBox.shrink();
+
+    final prevMonth = DateTime(selectedMonth.year, selectedMonth.month - 1);
+    final thisFmt   = DateFormat('MMM').format(selectedMonth);
+    final prevFmt   = DateFormat('MMM').format(prevMonth);
+
+    return AnimatedOpacity(
+      opacity:  phase >= 3 ? 1 : 0,
+      duration: const Duration(milliseconds: 400),
+      child: Container(
+        decoration: BoxDecoration(
+          color:        AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border:       Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
+              child: Row(
+                children: [
+                  const Text('🗂️', style: TextStyle(fontSize: 14)),
+                  const SizedBox(width: 8),
+                  Text('Spending by Category',
+                      style: GoogleFonts.dmSerifDisplay(
+                          fontSize: 14, color: AppColors.textPrimary)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // Column headers
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                border: Border(
+                  top:    BorderSide(color: AppColors.border),
+                  bottom: BorderSide(color: AppColors.border),
+                ),
+                color: AppColors.bg,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 5,
+                    child: Text('Category',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 9, fontWeight: FontWeight.w700,
+                          color: AppColors.textDim, letterSpacing: 0.8,
+                        )),
+                  ),
+                  Expanded(
+                    flex: 4,
+                    child: Text('This ($thisFmt)',
+                        textAlign: TextAlign.right,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 9, fontWeight: FontWeight.w700,
+                          color: AppColors.textDim, letterSpacing: 0.8,
+                        )),
+                  ),
+                  Expanded(
+                    flex: 4,
+                    child: Text('Prev ($prevFmt)',
+                        textAlign: TextAlign.right,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 9, fontWeight: FontWeight.w700,
+                          color: AppColors.textDim, letterSpacing: 0.8,
+                        )),
+                  ),
+                  const SizedBox(width: 6),
+                  SizedBox(
+                    width: 20,
+                    child: Text('▲▼',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 9, fontWeight: FontWeight.w700,
+                          color: AppColors.textDim, letterSpacing: 0.5,
+                        )),
+                  ),
+                ],
+              ),
+            ),
+
+            // Rows
+            ...categoryStats.asMap().entries.map((e) {
+              final i   = e.key;
+              final cat = e.value;
+              final prev  = prevCatMap[cat.name] ?? 0.0;
+              final isUp  = cat.amount > prev;
+              final isEq  = cat.amount == prev;
+              final isLast = i == categoryStats.length - 1;
+
+              return Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: i.isEven ? AppColors.surface : AppColors.bg,
+                  borderRadius: isLast
+                      ? const BorderRadius.vertical(
+                      bottom: Radius.circular(14))
+                      : null,
+                ),
+                child: Row(
+                  children: [
+                    // Category name
+                    Expanded(
+                      flex: 5,
+                      child: Row(
+                        children: [
+                          Text(cat.icon,
+                              style: const TextStyle(fontSize: 13)),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(cat.name,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 11, fontWeight: FontWeight.w600,
+                                  color: AppColors.textSecondary,
+                                )),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // This period
+                    Expanded(
+                      flex: 4,
+                      child: Text(
+                        cur.formatShort(cat.amount),
+                        textAlign: TextAlign.right,
+                        style: GoogleFonts.dmMono(
+                          fontSize: 10,
+                          color: cat.amount > 0
+                              ? AppColors.expenseRed
+                              : AppColors.textDim,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    // Prev period
+                    Expanded(
+                      flex: 4,
+                      child: Text(
+                        prev > 0 ? cur.formatShort(prev) : '—',
+                        textAlign: TextAlign.right,
+                        style: GoogleFonts.dmMono(
+                          fontSize: 10,
+                          color: prev > 0
+                              ? AppColors.textMuted
+                              : AppColors.textGhost,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    // Trend arrow
+                    SizedBox(
+                      width: 20,
+                      child: isEq
+                          ? Text('—',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.plusJakartaSans(
+                              fontSize: 11, color: AppColors.textGhost))
+                          : Icon(
+                        isUp
+                            ? Icons.arrow_upward_rounded
+                            : Icons.arrow_downward_rounded,
+                        size: 13,
+                        color: isUp
+                            ? AppColors.expenseRed
+                            : AppColors.incomeGreen,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Biggest Movers Table ──────────────────────────────────────────────────────
+class _BiggestMoversTable extends StatelessWidget {
+  final int              phase;
+  final List<CategoryStat> categoryStats;
+  final Map<String, double> prevCatMap;
+  final CurrencyInfo     cur;
+  final DateTime         selectedMonth;
+
+  const _BiggestMoversTable({
+    required this.phase,
+    required this.categoryStats,
+    required this.prevCatMap,
+    required this.cur,
+    required this.selectedMonth,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Build movers: delta = this - prev, only show categories that appeared
+    // in either period. Sort by absolute delta descending.
+    final allNames = {
+      ...categoryStats.map((c) => c.name),
+      ...prevCatMap.keys,
+    };
+
+    final movers = allNames.map((name) {
+      final thisCat = categoryStats.where((c) => c.name == name).firstOrNull;
+      final thisPeriod = thisCat?.amount ?? 0.0;
+      final prevPeriod = prevCatMap[name] ?? 0.0;
+      final delta      = thisPeriod - prevPeriod;
+      final pctChange  = prevPeriod > 0
+          ? (delta / prevPeriod * 100)
+          : (thisPeriod > 0 ? 100.0 : 0.0);
+      return _MoverRow(
+        icon:       thisCat?.icon ?? '📦',
+        name:       name,
+        delta:      delta,
+        pctChange:  pctChange,
+        thisPeriod: thisPeriod,
+        prevPeriod: prevPeriod,
+      );
+    }).toList()
+      ..sort((a, b) => b.delta.abs().compareTo(a.delta.abs()));
+
+    if (movers.isEmpty) return const SizedBox.shrink();
+
+    final prevMonth = DateTime(selectedMonth.year, selectedMonth.month - 1);
+    final thisFmt   = DateFormat('MMM').format(selectedMonth);
+    final prevFmt   = DateFormat('MMM').format(prevMonth);
+
+    return AnimatedOpacity(
+      opacity:  phase >= 3 ? 1 : 0,
+      duration: const Duration(milliseconds: 500),
+      child: Container(
+        decoration: BoxDecoration(
+          color:        AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border:       Border.all(color: AppColors.expenseRed.withOpacity(0.18)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
+              child: Row(
+                children: [
+                  const Text('📈', style: TextStyle(fontSize: 14)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Biggest Movers',
+                        style: GoogleFonts.dmSerifDisplay(
+                            fontSize: 14, color: AppColors.textPrimary)),
+                  ),
+                  Text('vs $prevFmt',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 10, fontWeight: FontWeight.w500,
+                        color: AppColors.textDim,
+                      )),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // Column headers
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                border: Border(
+                  top:    BorderSide(color: AppColors.border),
+                  bottom: BorderSide(color: AppColors.border),
+                ),
+                color: AppColors.bg,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 5,
+                    child: Text('Category',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 9, fontWeight: FontWeight.w700,
+                          color: AppColors.textDim, letterSpacing: 0.8,
+                        )),
+                  ),
+                  Expanded(
+                    flex: 4,
+                    child: Text('Δ Amount',
+                        textAlign: TextAlign.right,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 9, fontWeight: FontWeight.w700,
+                          color: AppColors.textDim, letterSpacing: 0.8,
+                        )),
+                  ),
+                  Expanded(
+                    flex: 3,
+                    child: Text('Δ %',
+                        textAlign: TextAlign.right,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 9, fontWeight: FontWeight.w700,
+                          color: AppColors.textDim, letterSpacing: 0.8,
+                        )),
+                  ),
+                  const SizedBox(width: 6),
+                  SizedBox(
+                    width: 20,
+                    child: Text('Dir',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 9, fontWeight: FontWeight.w700,
+                          color: AppColors.textDim, letterSpacing: 0.5,
+                        )),
+                  ),
+                ],
+              ),
+            ),
+
+            // Rows
+            ...movers.asMap().entries.map((e) {
+              final i    = e.key;
+              final m    = e.value;
+              final isUp = m.delta > 0;
+              final isEq = m.delta == 0;
+              final isLast = i == movers.length - 1;
+              final deltaColor = isEq
+                  ? AppColors.textGhost
+                  : isUp
+                  ? AppColors.expenseRed
+                  : AppColors.incomeGreen;
+
+              return Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: i.isEven ? AppColors.surface : AppColors.bg,
+                  borderRadius: isLast
+                      ? const BorderRadius.vertical(
+                      bottom: Radius.circular(14))
+                      : null,
+                ),
+                child: Row(
+                  children: [
+                    // Category
+                    Expanded(
+                      flex: 5,
+                      child: Row(
+                        children: [
+                          Text(m.icon,
+                              style: const TextStyle(fontSize: 13)),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(m.name,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 11, fontWeight: FontWeight.w600,
+                                  color: AppColors.textSecondary,
+                                )),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Delta amount
+                    Expanded(
+                      flex: 4,
+                      child: Text(
+                        isEq
+                            ? '0'
+                            : '${isUp ? '+' : '−'}${cur.formatShort(m.delta.abs())}',
+                        textAlign: TextAlign.right,
+                        style: GoogleFonts.dmMono(
+                          fontSize: 10,
+                          color: deltaColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    // Delta %
+                    Expanded(
+                      flex: 3,
+                      child: Text(
+                        isEq
+                            ? '0.0%'
+                            : '${isUp ? '+' : ''}${m.pctChange.toStringAsFixed(1)}%',
+                        textAlign: TextAlign.right,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 10, fontWeight: FontWeight.w600,
+                          color: deltaColor,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    // Direction
+                    SizedBox(
+                      width: 20,
+                      child: isEq
+                          ? Text('—',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.plusJakartaSans(
+                              fontSize: 11, color: AppColors.textGhost))
+                          : Icon(
+                        isUp
+                            ? Icons.arrow_upward_rounded
+                            : Icons.arrow_downward_rounded,
+                        size: 13,
+                        color: deltaColor,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MoverRow {
+  final String icon, name;
+  final double delta, pctChange, thisPeriod, prevPeriod;
+  const _MoverRow({
+    required this.icon,
+    required this.name,
+    required this.delta,
+    required this.pctChange,
+    required this.thisPeriod,
+    required this.prevPeriod,
+  });
+}
+
+
 class _AvgCard extends StatelessWidget {
   final String label, value;
   const _AvgCard({required this.label, required this.value});
@@ -702,7 +1192,7 @@ class _SpendingChartState extends State<_SpendingChart>
         parent: _ctrl, curve: const Cubic(0.16, 1, 0.3, 1));
     if (widget.visible) {
       Future.delayed(const Duration(milliseconds: 300),
-          () { if (mounted) _ctrl.forward(); });
+              () { if (mounted) _ctrl.forward(); });
     }
   }
 
@@ -711,7 +1201,7 @@ class _SpendingChartState extends State<_SpendingChart>
     super.didUpdateWidget(old);
     if (widget.visible && !old.visible) {
       Future.delayed(const Duration(milliseconds: 300),
-          () { if (mounted) _ctrl.forward(); });
+              () { if (mounted) _ctrl.forward(); });
     }
   }
 
@@ -749,31 +1239,31 @@ class _SpendingChartState extends State<_SpendingChart>
                       fontSize: 14, color: AppColors.textPrimary)),
               _hoveredIndex != null
                   ? Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color:        AppColors.bg,
-                        borderRadius: BorderRadius.circular(7),
-                      ),
-                      child: Row(
-                        children: [
-                          Text('Day ${_hoveredIndex! + 1}',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 10, fontWeight: FontWeight.w600,
-                                color: AppColors.textSecondary,
-                              )),
-                          const SizedBox(width: 6),
-                          Text(
-                            daily[_hoveredIndex!] > 0
-                                // ← was '−${_fmtRp(...)}'
-                                ? '−${cur.format(daily[_hoveredIndex!].toDouble())}'
-                                : 'No spend',
-                            style: GoogleFonts.dmMono(
-                                fontSize: 10, color: AppColors.expenseRed),
-                          ),
-                        ],
-                      ),
-                    )
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color:        AppColors.bg,
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Row(
+                  children: [
+                    Text('Day ${_hoveredIndex! + 1}',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 10, fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary,
+                        )),
+                    const SizedBox(width: 6),
+                    Text(
+                      daily[_hoveredIndex!] > 0
+                      // ← was '−${_fmtRp(...)}'
+                          ? '−${cur.format(daily[_hoveredIndex!].toDouble())}'
+                          : 'No spend',
+                      style: GoogleFonts.dmMono(
+                          fontSize: 10, color: AppColors.expenseRed),
+                    ),
+                  ],
+                ),
+              )
                   : const SizedBox(),
             ],
           ),
@@ -885,7 +1375,7 @@ class _ChartPainter extends CustomPainter {
         final tp = TextPainter(
           text: TextSpan(
             text:  '${i + 1}',
-            style: const TextStyle(fontSize: 8, color: AppColors.textDim),
+            style: TextStyle(fontSize: 8, color: AppColors.textDim),
           ),
           textDirection: ui.TextDirection.ltr,
         )..layout();
@@ -909,7 +1399,7 @@ class _ChartPainter extends CustomPainter {
   @override
   bool shouldRepaint(_ChartPainter old) =>
       old.animValue    != animValue ||
-      old.hoveredIndex != hoveredIndex;
+          old.hoveredIndex != hoveredIndex;
 }
 
 // ── BUDGETS VIEW ──────────────────────────────────────────────────────────────
@@ -932,7 +1422,7 @@ class _BudgetsViewState extends ConsumerState<_BudgetsView> {
     final allCats      = allCatsAsync.valueOrNull ?? [];
     final budgetCatIds = budgets.map((b) => b.category.id).toSet();
     final noBudgetCats =
-        allCats.where((c) => !budgetCatIds.contains(c.id)).toList();
+    allCats.where((c) => !budgetCatIds.contains(c.id)).toList();
     final totalBudget  = budgets.fold(0.0, (s, b) => s + b.budget.amount);
     final totalSpent   = budgets.fold(0.0, (s, b) => s + b.spent);
     final totalPct     = totalBudget > 0
@@ -986,54 +1476,54 @@ class _BudgetsViewState extends ConsumerState<_BudgetsView> {
                         )),
                     const SizedBox(height: 8),
                     ...noBudgetCats.map((c) => Container(
-                          margin:  const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 11),
-                          decoration: BoxDecoration(
-                            color:        AppColors.surface,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                                color: AppColors.borderStrong),
+                      margin:  const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 11),
+                      decoration: BoxDecoration(
+                        color:        AppColors.surface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                            color: AppColors.borderStrong),
+                      ),
+                      child: Row(
+                        children: [
+                          Text(c.icon,
+                              style: const TextStyle(fontSize: 14)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(c.name,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 12, fontWeight: FontWeight.w500,
+                                  color: AppColors.textMuted,
+                                )),
                           ),
-                          child: Row(
-                            children: [
-                              Text(c.icon,
-                                  style: const TextStyle(fontSize: 14)),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(c.name,
-                                    style: GoogleFonts.plusJakartaSans(
-                                      fontSize: 12, fontWeight: FontWeight.w500,
-                                      color: AppColors.textMuted,
-                                    )),
+                          GestureDetector(
+                            onTap: () => showModalBottomSheet(
+                              context: context,
+                              backgroundColor: Colors.transparent,
+                              isScrollControlled: true,
+                              builder: (_) =>
+                                  SetBudgetSheet(category: c),
+                            ),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 5),
+                              decoration: BoxDecoration(
+                                color:        AppColors.accentDim,
+                                borderRadius: BorderRadius.circular(7),
+                                border: Border.all(
+                                    color: AppColors.accentMuted),
                               ),
-                              GestureDetector(
-                                onTap: () => showModalBottomSheet(
-                                  context: context,
-                                  backgroundColor: Colors.transparent,
-                                  isScrollControlled: true,
-                                  builder: (_) =>
-                                      SetBudgetSheet(category: c),
-                                ),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 5),
-                                  decoration: BoxDecoration(
-                                    color:        AppColors.accentDim,
-                                    borderRadius: BorderRadius.circular(7),
-                                    border: Border.all(
-                                        color: AppColors.accentMuted),
-                                  ),
-                                  child: Text('Set budget',
-                                      style: GoogleFonts.plusJakartaSans(
-                                        fontSize: 10, fontWeight: FontWeight.w600,
-                                        color: AppColors.accent,
-                                      )),
-                                ),
-                              ),
-                            ],
+                              child: Text('Set budget',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 10, fontWeight: FontWeight.w600,
+                                    color: AppColors.accent,
+                                  )),
+                            ),
                           ),
-                        )),
+                        ],
+                      ),
+                    )),
                   ],
                 ),
               ),
@@ -1372,9 +1862,9 @@ class _BudgetDetailSheetState extends State<_BudgetDetailSheet> {
                 constraints: BoxConstraints(
                   maxHeight: MediaQuery.of(context).size.height * 0.8,
                 ),
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color:        AppColors.surfaceEl,
-                  borderRadius: BorderRadius.vertical(
+                  borderRadius: const BorderRadius.vertical(
                       top: Radius.circular(24)),
                 ),
                 padding: const EdgeInsets.fromLTRB(24, 12, 24, 36),
@@ -1431,7 +1921,7 @@ class _BudgetDetailSheetState extends State<_BudgetDetailSheet> {
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(color: AppColors.border),
                             ),
-                            child: const Icon(Icons.close_rounded,
+                            child: Icon(Icons.close_rounded,
                                 color: AppColors.textMuted, size: 16),
                           ),
                         ),
@@ -1560,7 +2050,7 @@ class _BudgetDetailSheetState extends State<_BudgetDetailSheet> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.edit_rounded,
+                            Icon(Icons.edit_rounded,
                                 size: 12, color: AppColors.accent),
                             const SizedBox(width: 6),
                             Text('Edit Budget',

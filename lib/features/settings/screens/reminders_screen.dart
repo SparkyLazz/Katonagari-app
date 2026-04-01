@@ -84,7 +84,7 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen> {
         initialTime: initial,
         builder: (ctx, child) => Theme(
           data: Theme.of(ctx).copyWith(
-            colorScheme: const ColorScheme.dark(
+            colorScheme: ColorScheme.dark(
               primary:          AppColors.accent,
               onPrimary:        AppColors.bg,
               secondary:        AppColors.accent,
@@ -222,7 +222,7 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen> {
                 children: [
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                    icon: Icon(Icons.arrow_back_ios_new_rounded,
                         color: AppColors.textSecondary, size: 18),
                   ),
                   Expanded(
@@ -235,7 +235,7 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen> {
             ),
 
             if (_loading)
-              const Expanded(
+              Expanded(
                 child: Center(
                     child: CircularProgressIndicator(color: AppColors.accent)),
               )
@@ -321,7 +321,7 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen> {
             child: _dailyEnabled
                 ? Column(
                     children: [
-                      const Divider(height: 1, color: AppColors.border),
+                      Divider(height: 1, color: AppColors.border),
                       GestureDetector(
                         onTap: _changeDailyTime,
                         child: Padding(
@@ -342,7 +342,7 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen> {
                                         color: AppColors.accent,
                                       )),
                                   const SizedBox(width: 6),
-                                  const Icon(Icons.chevron_right_rounded,
+                                  Icon(Icons.chevron_right_rounded,
                                       size: 16, color: AppColors.textDim),
                                 ],
                               ),
@@ -406,7 +406,7 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen> {
             child: _weeklyEnabled
                 ? Column(
                     children: [
-                      const Divider(height: 1, color: AppColors.border),
+                      Divider(height: 1, color: AppColors.border),
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                         child: Column(
@@ -481,7 +481,7 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen> {
                                         color: AppColors.accent,
                                       )),
                                   const SizedBox(width: 6),
-                                  const Icon(Icons.chevron_right_rounded,
+                                  Icon(Icons.chevron_right_rounded,
                                       size: 16, color: AppColors.textDim),
                                 ],
                               ),
@@ -552,7 +552,7 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.add_rounded,
+                Icon(Icons.add_rounded,
                     color: AppColors.accent, size: 18),
                 const SizedBox(width: 8),
                 Text('Add Bill',
@@ -630,14 +630,14 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen> {
 
             GestureDetector(
               onTap: () => _openAddBill(existing: bill),
-              child: const Icon(Icons.edit_outlined,
+              child: Icon(Icons.edit_outlined,
                   size: 18, color: AppColors.textMuted),
             ),
             const SizedBox(width: 4),
 
             GestureDetector(
               onTap: () => _showDeleteConfirm(bill),
-              child: const Icon(Icons.delete_outline_rounded,
+              child: Icon(Icons.delete_outline_rounded,
                   size: 18, color: AppColors.expenseRed),
             ),
           ],
@@ -815,9 +815,9 @@ class _BillSheetState extends State<_BillSheet> {
       padding: EdgeInsets.only(
           bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color:        AppColors.surfaceEl,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
         child: SingleChildScrollView(
@@ -1094,15 +1094,15 @@ class _BillSheetState extends State<_BillSheet> {
               const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide:   const BorderSide(color: AppColors.border),
+            borderSide:   BorderSide(color: AppColors.border),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide:   const BorderSide(color: AppColors.border),
+            borderSide:   BorderSide(color: AppColors.border),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide:   const BorderSide(
+            borderSide:   BorderSide(
                 color: AppColors.accent, width: 1.5),
           ),
         ),

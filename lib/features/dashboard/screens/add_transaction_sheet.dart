@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:drift/drift.dart' as drift;
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/utils/currency_formatter.dart';
@@ -15,7 +16,7 @@ String _fmtAmount(String raw) {
   final n = int.tryParse(raw) ?? 0;
   return n.toString().replaceAllMapped(
     RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-    (m) => '${m[1]}.',
+        (m) => '${m[1]}.',
   );
 }
 
@@ -31,17 +32,46 @@ class AddTransactionSheet extends ConsumerStatefulWidget {
 }
 
 class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
-  String  _amount    = '';
-  String? _catId;
-  String  _type      = 'expense';
-  String  _mode      = 'quick';
-  String  _note      = '';
-  bool    _isOneTime = false;
-  String  _recurring = 'none';
-  bool    _showMore  = false;
-  int?    _walletId;
+  String   _amount       = '';
+  String?  _catId;
+  String   _type         = 'expense';
+  String   _mode         = 'quick';
+  String   _note         = '';
+  bool     _isOneTime    = false;
+  String   _recurring    = 'none';
+  bool     _showMore     = false;
+  int?     _walletId;
+  DateTime _selectedDate = DateTime.now();
+
+  final _scrollController = ScrollController();
+  final _noteFocusNode    = FocusNode();
 
   bool get _isIncome => _type == 'income';
+
+  @override
+  void initState() {
+    super.initState();
+    _noteFocusNode.addListener(() {
+      if (_noteFocusNode.hasFocus) {
+        Future.delayed(const Duration(milliseconds: 350), () {
+          if (_scrollController.hasClients) {
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            );
+          }
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _noteFocusNode.dispose();
+    super.dispose();
+  }
 
   List<Category> get _cats {
     if (_isIncome) return ref.watch(incomeCategoriesProvider).valueOrNull ?? [];
@@ -103,7 +133,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
         type:        _isIncome ? 'INCOME' : 'EXPENSE',
         amount:      double.parse(_amount),
         note:        drift.Value(_note.isEmpty ? null : _note),
-        date:        DateTime.now(),
+        date:        _selectedDate,
         isOneTime:   drift.Value(_isOneTime),
         isRecurring: drift.Value(_recurring != 'none'),
       ));
@@ -149,9 +179,9 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
     return Container(
       height: MediaQuery.of(context).size.height *
           (_mode == 'full' ? 0.94 : 0.78),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surfaceEl,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         children: [
@@ -188,7 +218,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
               onTap: () => setState(() => _mode = 'quick'),
               child: Row(
                 children: [
-                  const Icon(Icons.chevron_left_rounded,
+                  Icon(Icons.chevron_left_rounded,
                       color: AppColors.textSecondary, size: 20),
                   Text('Numpad',
                       style: GoogleFonts.plusJakartaSans(
@@ -232,7 +262,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
                                 color: AppColors.textMuted,
                               )),
                           const SizedBox(width: 3),
-                          const Icon(Icons.unfold_more_rounded,
+                          Icon(Icons.unfold_more_rounded,
                               size: 12, color: AppColors.textDim),
                         ],
                       ),
@@ -264,7 +294,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
                 onTap: () => Navigator.of(context).pop(),
                 child: Container(
                   padding: const EdgeInsets.all(4),
-                  child: const Icon(Icons.close_rounded,
+                  child: Icon(Icons.close_rounded,
                       color: AppColors.textMuted, size: 20),
                 ),
               ),
@@ -289,7 +319,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
         ),
         _buildCategoryRow(),
         const SizedBox(height: 6),
-        const Divider(color: AppColors.border, height: 1),
+        Divider(color: AppColors.border, height: 1),
         const SizedBox(height: 6),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -310,6 +340,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
   // ─────────────────────────────────────────────────────
   Widget _buildFullMode(List<Wallet> wallets, CurrencyInfo cur) {
     return SingleChildScrollView(
+      controller: _scrollController,
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -388,7 +419,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
                   AnimatedRotation(
                     turns: _showMore ? 0.5 : 0,
                     duration: const Duration(milliseconds: 200),
-                    child: const Icon(Icons.keyboard_arrow_down_rounded,
+                    child: Icon(Icons.keyboard_arrow_down_rounded,
                         size: 16, color: AppColors.textMuted),
                   ),
                 ],
@@ -417,7 +448,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (_canSave) ...[
-                    const Icon(Icons.check_rounded,
+                    Icon(Icons.check_rounded,
                         color: AppColors.bg, size: 18),
                     const SizedBox(width: 8),
                   ],
@@ -425,8 +456,8 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
                     _canSave
                         ? 'Save Transaction'
                         : _hasAmount
-                            ? 'Pick a category'
-                            : 'Enter amount & category',
+                        ? 'Pick a category'
+                        : 'Enter amount & category',
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 15, fontWeight: FontWeight.w700,
                       color: _canSave ? AppColors.bg : AppColors.textDim,
@@ -453,7 +484,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
         ),
         child: Row(
           children: [
-            const Icon(Icons.warning_amber_rounded,
+            Icon(Icons.warning_amber_rounded,
                 color: AppColors.expenseRed, size: 18),
             const SizedBox(width: 10),
             Expanded(
@@ -517,7 +548,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
                   ),
                   if (selected) ...[
                     const SizedBox(width: 6),
-                    const Icon(Icons.check_circle_rounded,
+                    Icon(Icons.check_circle_rounded,
                         color: AppColors.accent, size: 14),
                   ],
                 ],
@@ -534,6 +565,75 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Text('DATE',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 10, fontWeight: FontWeight.w600,
+              color: AppColors.textDim, letterSpacing: 1.2,
+            )),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: _selectedDate,
+              firstDate: DateTime(2020),
+              lastDate: DateTime.now(),
+              builder: (ctx, child) => Theme(
+                data: Theme.of(ctx).copyWith(
+                  colorScheme: ColorScheme.dark(
+                    primary:   AppColors.accent,
+                    onPrimary: AppColors.bg,
+                    surface:   AppColors.surfaceEl,
+                    onSurface: AppColors.textPrimary,
+                  ),
+                ),
+                child: child!,
+              ),
+            );
+            if (picked != null) setState(() => _selectedDate = picked);
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.calendar_today_rounded,
+                    size: 16, color: AppColors.textMuted),
+                const SizedBox(width: 10),
+                Text(
+                  DateFormat('dd MMM yyyy').format(_selectedDate),
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 13, color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const Spacer(),
+                if (_selectedDate.year  != DateTime.now().year  ||
+                    _selectedDate.month != DateTime.now().month ||
+                    _selectedDate.day   != DateTime.now().day)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.accentDim,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text('Custom',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 10, color: AppColors.accent,
+                          fontWeight: FontWeight.w600,
+                        )),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+
         Text('NOTE',
             style: GoogleFonts.plusJakartaSans(
               fontSize: 10, fontWeight: FontWeight.w600,
@@ -541,6 +641,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
             )),
         const SizedBox(height: 8),
         TextField(
+          focusNode: _noteFocusNode,
           onChanged: (v) => setState(() => _note = v),
           maxLength: 100,
           style: GoogleFonts.plusJakartaSans(
@@ -554,19 +655,19 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
             fillColor: AppColors.surface,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.border),
+              borderSide: BorderSide(color: AppColors.border),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.border),
+              borderSide: BorderSide(color: AppColors.border),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide:
-                  const BorderSide(color: AppColors.accent, width: 1.5),
+              BorderSide(color: AppColors.accent, width: 1.5),
             ),
             contentPadding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           ),
         ),
         const SizedBox(height: 14),
@@ -679,8 +780,8 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
                 fontSize: display.length > 9
                     ? 32
                     : display.length > 6
-                        ? 42
-                        : 52,
+                    ? 42
+                    : 52,
                 color: _amount.isEmpty
                     ? AppColors.textDim
                     : AppColors.textPrimary,
@@ -689,10 +790,19 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
           ],
         ),
         const SizedBox(height: 4),
-        Text('Tap amount to see full form',
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 11, color: AppColors.textGhost,
-            )),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color:        AppColors.accentDim,
+            borderRadius: BorderRadius.circular(8),
+            border:       Border.all(color: AppColors.accentMuted),
+          ),
+          child: Text('Tap amount to see full form',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 11, fontWeight: FontWeight.w500,
+                color: AppColors.accent,
+              )),
+        ),
       ],
     );
   }
@@ -720,8 +830,8 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
             color: _amount.isEmpty
                 ? AppColors.textDim
                 : _isIncome
-                    ? AppColors.incomeGreen
-                    : AppColors.expenseRed,
+                ? AppColors.incomeGreen
+                : AppColors.expenseRed,
           ),
         ),
       ],
@@ -897,16 +1007,16 @@ class _NumKeyState extends State<_NumKey> {
         ),
         alignment: Alignment.center,
         child: widget.label == 'del'
-            ? const Icon(Icons.backspace_outlined,
-                color: AppColors.textSecondary, size: 20)
+            ? Icon(Icons.backspace_outlined,
+            color: AppColors.textSecondary, size: 20)
             : Text(
-                widget.label,
-                style: widget.label == '000'
-                    ? GoogleFonts.dmMono(
-                        fontSize: 15, color: AppColors.textPrimary)
-                    : GoogleFonts.dmSerifDisplay(
-                        fontSize: 20, color: AppColors.textPrimary),
-              ),
+          widget.label,
+          style: widget.label == '000'
+              ? GoogleFonts.dmMono(
+              fontSize: 15, color: AppColors.textPrimary)
+              : GoogleFonts.dmSerifDisplay(
+              fontSize: 20, color: AppColors.textPrimary),
+        ),
       ),
     );
   }
@@ -944,15 +1054,15 @@ class _SaveButton extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (canSave) ...[
-              const Icon(Icons.check_rounded, color: AppColors.bg, size: 16),
+              Icon(Icons.check_rounded, color: AppColors.bg, size: 16),
               const SizedBox(width: 6),
             ],
             Text(
               canSave
                   ? 'Save'
                   : hasAmount
-                      ? 'Pick a category'
-                      : 'Enter amount',
+                  ? 'Pick a category'
+                  : 'Enter amount',
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,

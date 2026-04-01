@@ -129,12 +129,12 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen>
           backgroundColor: AppColors.surfaceEl,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
-            side: const BorderSide(color: AppColors.borderStrong),
+            side: BorderSide(color: AppColors.borderStrong),
           ),
           duration: const Duration(seconds: 4),
           content: Row(
             children: [
-              const Icon(Icons.close_rounded,
+              Icon(Icons.close_rounded,
                   color: AppColors.expenseRed, size: 16),
               const SizedBox(width: 10),
               Expanded(
@@ -350,7 +350,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen>
                           color: AppColors.borderStrong,
                           borderRadius: BorderRadius.circular(6),
                         ),
-                        child: const Icon(Icons.close_rounded,
+                        child: Icon(Icons.close_rounded,
                             size: 12, color: AppColors.textSecondary),
                       ),
                     ),
@@ -457,7 +457,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen>
                               _dateRangeLabel = null;
                               _cachedFiltered = null;
                             }),
-                            child: const Icon(Icons.close_rounded,
+                            child: Icon(Icons.close_rounded,
                                 size: 12, color: AppColors.accent),
                           ),
                         ],
@@ -755,7 +755,7 @@ class _SwipeableTxRowState extends State<_SwipeableTxRow> {
                 transform: Matrix4.translationValues(_offsetX, 0, 0),
                 padding: EdgeInsets.symmetric(
                     horizontal: 14, vertical: isLarge ? 14 : 11),
-                decoration: const BoxDecoration(color: AppColors.bg),
+                decoration: BoxDecoration(color: AppColors.bg),
                 child: Row(
                   children: [
                     Container(
@@ -925,9 +925,9 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
     final fmt     = DateFormat('d MMM');
 
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color:        AppColors.surfaceEl,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 40),
       child: SingleChildScrollView(
@@ -1264,7 +1264,7 @@ class _MiniCalendar extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                   border:       Border.all(color: AppColors.border),
                 ),
-                child: const Icon(Icons.chevron_left_rounded,
+                child: Icon(Icons.chevron_left_rounded,
                     size: 18, color: AppColors.textMuted),
               ),
             ),
@@ -1284,7 +1284,7 @@ class _MiniCalendar extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                   border:       Border.all(color: AppColors.border),
                 ),
-                child: const Icon(Icons.chevron_right_rounded,
+                child: Icon(Icons.chevron_right_rounded,
                     size: 18, color: AppColors.textMuted),
               ),
             ),

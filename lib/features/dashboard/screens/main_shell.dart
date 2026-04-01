@@ -60,7 +60,7 @@ class _MainShellState extends State<MainShell>
         backgroundColor: AppColors.surfaceEl,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: AppColors.borderStrong),
+          side: BorderSide(color: AppColors.borderStrong),
         ),
         duration: const Duration(seconds: 3),
         content: Row(
@@ -73,7 +73,7 @@ class _MainShellState extends State<MainShell>
                     : AppColors.expenseRedDim,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.check_rounded,
+              child: Icon(Icons.check_rounded,
                   color: AppColors.incomeGreen, size: 16),
             ),
             const SizedBox(width: 12),
@@ -162,7 +162,7 @@ class _BottomNav extends StatelessWidget {
     ];
 
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.bg,
         border: Border(top: BorderSide(color: AppColors.border, width: 1)),
       ),
@@ -225,7 +225,7 @@ class _BottomNav extends StatelessWidget {
                           ),
                         ],
                       ),
-                      child: const Icon(Icons.add,
+                      child: Icon(Icons.add,
                           color: AppColors.bg, size: 26),
                     ),
                   ),
@@ -285,7 +285,7 @@ class _NavItem extends StatelessWidget {
             duration: const Duration(milliseconds: 200),
             width: isActive ? 4 : 0,
             height: isActive ? 4 : 0,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: AppColors.accent,
               shape: BoxShape.circle,
             ),

@@ -190,7 +190,7 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
                 children: [
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                    icon: Icon(Icons.arrow_back_ios_new_rounded,
                         color: AppColors.textSecondary, size: 18),
                   ),
                   Expanded(
@@ -317,12 +317,12 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
           children: [
             IconButton(
               onPressed: () => _showEditSheet(wallet),
-              icon: const Icon(Icons.edit_outlined,
+              icon: Icon(Icons.edit_outlined,
                   color: AppColors.textMuted, size: 20),
             ),
             IconButton(
               onPressed: () => _delete(wallet),
-              icon: const Icon(Icons.delete_outline_rounded,
+              icon: Icon(Icons.delete_outline_rounded,
                   color: AppColors.expenseRed, size: 20),
             ),
           ],
@@ -417,15 +417,15 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
               fillColor: AppColors.surfaceEl,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppColors.border),
+                borderSide: BorderSide(color: AppColors.border),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppColors.border),
+                borderSide: BorderSide(color: AppColors.border),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(
+                borderSide: BorderSide(
                     color: AppColors.accent, width: 1.5),
               ),
               contentPadding:
@@ -461,15 +461,15 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
               fillColor: AppColors.surfaceEl,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppColors.border),
+                borderSide: BorderSide(color: AppColors.border),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppColors.border),
+                borderSide: BorderSide(color: AppColors.border),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(
+                borderSide: BorderSide(
                     color: AppColors.accent, width: 1.5),
               ),
               contentPadding:
@@ -533,7 +533,7 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
               ),
               alignment: Alignment.center,
               child: _saving
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 18, height: 18,
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: AppColors.bg),
@@ -619,9 +619,9 @@ class _EditWalletSheetState extends ConsumerState<_EditWalletSheet> {
     return Container(
       padding: EdgeInsets.fromLTRB(
           20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 32),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color:        AppColors.surfaceEl,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -657,15 +657,15 @@ class _EditWalletSheetState extends ConsumerState<_EditWalletSheet> {
               fillColor: AppColors.surface,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppColors.border),
+                borderSide: BorderSide(color: AppColors.border),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppColors.border),
+                borderSide: BorderSide(color: AppColors.border),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(
+                borderSide: BorderSide(
                     color: AppColors.accent, width: 1.5),
               ),
               contentPadding:
@@ -718,7 +718,7 @@ class _EditWalletSheetState extends ConsumerState<_EditWalletSheet> {
               ),
               alignment: Alignment.center,
               child: _saving
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 18, height: 18,
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: AppColors.bg),

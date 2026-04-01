@@ -82,9 +82,9 @@ class _SetBudgetSheetState extends ConsumerState<SetBudgetSheet> {
     final cur       = ref.currency; // ← live currency symbol
 
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color:        AppColors.surfaceEl,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
@@ -147,7 +147,7 @@ class _SetBudgetSheetState extends ConsumerState<SetBudgetSheet> {
                       borderRadius: BorderRadius.circular(8),
                       border:       Border.all(color: AppColors.border),
                     ),
-                    child: const Icon(Icons.close_rounded,
+                    child: Icon(Icons.close_rounded,
                         size: 16, color: AppColors.textMuted),
                   ),
                 ),
@@ -185,7 +185,7 @@ class _SetBudgetSheetState extends ConsumerState<SetBudgetSheet> {
           ),
 
           const SizedBox(height: 8),
-          const Divider(color: AppColors.border, height: 1),
+          Divider(color: AppColors.border, height: 1),
           const SizedBox(height: 8),
 
           // Numpad
@@ -193,48 +193,8 @@ class _SetBudgetSheetState extends ConsumerState<SetBudgetSheet> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Column(
               children: [
-                ...['789', '456', '123', '000', '0⌫'].map((row) {
-                  if (row == '000') {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _NumKey(
-                                label: '000', onTap: () => _onKey('000')),
-                          ),
-                          const SizedBox(width: 6),
-                          const Expanded(child: SizedBox()),
-                          const SizedBox(width: 6),
-                          const Expanded(child: SizedBox()),
-                        ],
-                      ),
-                    );
-                  }
-
-                  if (row == '0⌫') {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Row(
-                        children: [
-                          const Expanded(child: SizedBox()),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: _NumKey(
-                                label: '0', onTap: () => _onKey('0')),
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: _NumKey(
-                                label: '⌫',
-                                isDelete: true,
-                                onTap: () => _onKey('⌫')),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-
+                // Rows: 7-8-9, 4-5-6, 1-2-3
+                ...['789', '456', '123'].map((row) {
                   final keys = row.split('');
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 6),
@@ -243,16 +203,39 @@ class _SetBudgetSheetState extends ConsumerState<SetBudgetSheet> {
                         final k = e.value;
                         return Expanded(
                           child: Padding(
-                            padding:
-                                EdgeInsets.only(left: e.key > 0 ? 6 : 0),
-                            child: _NumKey(
-                                label: k, onTap: () => _onKey(k)),
+                            padding: EdgeInsets.only(left: e.key > 0 ? 6 : 0),
+                            child: _NumKey(label: k, onTap: () => _onKey(k)),
                           ),
                         );
                       }).toList(),
                     ),
                   );
                 }),
+
+                // Last row: 000 | 0 | ⌫  — all three equal width
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _NumKey(
+                            label: '000', onTap: () => _onKey('000')),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: _NumKey(
+                            label: '0', onTap: () => _onKey('0')),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: _NumKey(
+                            label: '⌫',
+                            isDelete: true,
+                            onTap: () => _onKey('⌫')),
+                      ),
+                    ],
+                  ),
+                ),
 
                 const SizedBox(height: 4),
 
@@ -276,7 +259,7 @@ class _SetBudgetSheetState extends ConsumerState<SetBudgetSheet> {
                     ),
                     alignment: Alignment.center,
                     child: _saving
-                        ? const SizedBox(
+                        ? SizedBox(
                             width: 20, height: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
@@ -334,7 +317,7 @@ class _NumKey extends StatelessWidget {
         child: Text(
           label,
           style: isDelete
-              ? const TextStyle(fontSize: 18, color: AppColors.expenseRed)
+              ? TextStyle(fontSize: 18, color: AppColors.expenseRed)
               : GoogleFonts.dmSerifDisplay(
                   fontSize: 20, color: AppColors.textPrimary),
         ),

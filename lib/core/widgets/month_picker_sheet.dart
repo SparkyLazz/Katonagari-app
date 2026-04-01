@@ -62,9 +62,9 @@ class _MonthPickerSheetState extends ConsumerState<_MonthPickerSheet> {
     ];
 
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color:        AppColors.surfaceEl,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 48),
       child: Column(
@@ -99,7 +99,7 @@ class _MonthPickerSheetState extends ConsumerState<_MonthPickerSheet> {
                       borderRadius: BorderRadius.circular(10),
                       border:       Border.all(color: AppColors.border),
                     ),
-                    child: const Icon(Icons.chevron_left_rounded,
+                    child: Icon(Icons.chevron_left_rounded,
                         size: 20, color: AppColors.textSecondary),
                   ),
                 ),
@@ -134,7 +134,7 @@ class _MonthPickerSheetState extends ConsumerState<_MonthPickerSheet> {
                       borderRadius: BorderRadius.circular(10),
                       border:       Border.all(color: AppColors.border),
                     ),
-                    child: const Icon(Icons.chevron_right_rounded,
+                    child: Icon(Icons.chevron_right_rounded,
                         size: 20, color: AppColors.textSecondary),
                   ),
                 ),

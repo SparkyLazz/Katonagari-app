@@ -1,67 +1,73 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart'; // ← add this
+import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 
 class AppTheme {
   AppTheme._();
 
-  static ThemeData get dark => ThemeData(
-    brightness: Brightness.dark,
-    scaffoldBackgroundColor: AppColors.bg,
+  static ThemeData buildFrom(AppColorScheme s) {
+    final brightness = s.isDark ? Brightness.dark : Brightness.light;
 
-    // ✅ Add this block
-    textTheme: GoogleFonts.plusJakartaSansTextTheme(
-      ThemeData.dark().textTheme,
-    ).apply(
-      bodyColor: AppColors.textPrimary,
-      displayColor: AppColors.textPrimary,
-    ),
-
-    colorScheme: const ColorScheme.dark(
-      background:   AppColors.bg,
-      surface:      AppColors.surface,
-      primary:      AppColors.accent,
-      onPrimary:    AppColors.bg,
-      secondary:    AppColors.accent,
-      onSecondary:  AppColors.bg,
-      error:        AppColors.expenseRed,
-      onBackground: AppColors.textPrimary,
-      onSurface:    AppColors.textPrimary,
-    ),
-    splashColor:         Colors.transparent,
-    highlightColor:      Colors.transparent,
-    dividerColor:        AppColors.border,
-    cardColor:           AppColors.surface,
-    bottomSheetTheme: const BottomSheetThemeData(
-      backgroundColor:    AppColors.surfaceEl,
-      surfaceTintColor:   Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    return ThemeData(
+      brightness: brightness,
+      scaffoldBackgroundColor: s.bg,
+      textTheme: GoogleFonts.plusJakartaSansTextTheme(
+        brightness == Brightness.dark
+            ? ThemeData.dark().textTheme
+            : ThemeData.light().textTheme,
+      ).apply(
+        bodyColor:    s.textPrimary,
+        displayColor: s.textPrimary,
       ),
-    ),
-    appBarTheme: const AppBarTheme(
-      backgroundColor:    AppColors.bg,
-      surfaceTintColor:   Colors.transparent,
-      elevation: 0,
-      systemOverlayStyle: SystemUiOverlayStyle(
-        statusBarColor:              Colors.transparent,
-        statusBarIconBrightness:     Brightness.light,
-        systemNavigationBarColor:    AppColors.bg,
-        systemNavigationBarIconBrightness: Brightness.light,
+      colorScheme: ColorScheme(
+        brightness:  brightness,
+        background:  s.bg,
+        surface:     s.surface,
+        primary:     s.accent,
+        onPrimary:   s.bg,
+        secondary:   s.accent,
+        onSecondary: s.bg,
+        error:       s.expenseRed,
+        onError:     s.bg,
+        onBackground: s.textPrimary,
+        onSurface:    s.textPrimary,
       ),
-    ),
-    navigationBarTheme: NavigationBarThemeData(
-      backgroundColor:      AppColors.bg,
-      surfaceTintColor:     Colors.transparent,
-      indicatorColor:       Colors.transparent,
-      elevation: 0,
-      labelTextStyle: WidgetStateProperty.all(
-        GoogleFonts.plusJakartaSans( // ✅ fix nav label font too
-          fontSize: 10,
-          fontWeight: FontWeight.w500,
+      splashColor:    Colors.transparent,
+      highlightColor: Colors.transparent,
+      dividerColor:   s.border,
+      cardColor:      s.surface,
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor:  s.surfaceEl,
+        surfaceTintColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
       ),
-    ),
-  );
+      appBarTheme: AppBarTheme(
+        backgroundColor:  s.bg,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        systemOverlayStyle: SystemUiOverlayStyle(
+          statusBarColor:                    Colors.transparent,
+          statusBarIconBrightness:           s.isDark ? Brightness.light : Brightness.dark,
+          statusBarBrightness:               s.isDark ? Brightness.dark  : Brightness.light,
+          systemNavigationBarColor:          s.bg,
+          systemNavigationBarIconBrightness: s.isDark ? Brightness.light : Brightness.dark,
+        ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor:  s.bg,
+        surfaceTintColor: Colors.transparent,
+        indicatorColor:   Colors.transparent,
+        elevation: 0,
+        labelTextStyle: WidgetStateProperty.all(
+          GoogleFonts.plusJakartaSans(fontSize: 10, fontWeight: FontWeight.w500),
+        ),
+      ),
+    );
+  }
+
+  // Keep a convenience getter for the default dark theme (used by splash etc.)
+  static ThemeData get dark => buildFrom(AppThemeSchemes.obsidianGold);
 }

@@ -1,12 +1,13 @@
 // lib/core/services/preferences_service.dart
 import 'package:shared_preferences/shared_preferences.dart';
+import '../theme/app_colors.dart';
 
 /// Supported currencies with their symbols and display names.
 class CurrencyInfo {
   final String code;
   final String symbol;
   final String displayName;
-  final String locale; // intl locale used for number formatting
+  final String locale;
 
   const CurrencyInfo({
     required this.code,
@@ -21,8 +22,9 @@ class PreferencesService {
   static final PreferencesService instance = PreferencesService._();
 
   // ── Keys ──────────────────────────────────────────────
-  static const _kLang     = 'language';       // 'en' | 'id'
-  static const _kCurrency = 'currency_code';  // 'IDR' | 'USD' | 'MYR' | etc.
+  static const _kLang     = 'language';
+  static const _kCurrency = 'currency_code';
+  static const _kTheme    = 'app_theme';        // ← NEW
 
   // ── Supported currencies ──────────────────────────────
   static const List<CurrencyInfo> supportedCurrencies = [
@@ -38,7 +40,7 @@ class PreferencesService {
 
   static CurrencyInfo currencyByCode(String code) =>
       supportedCurrencies.firstWhere(
-        (c) => c.code == code,
+            (c) => c.code == code,
         orElse: () => supportedCurrencies.first,
       );
 
@@ -62,5 +64,21 @@ class PreferencesService {
   Future<void> setCurrencyCode(String code) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kCurrency, code);
+  }
+
+  // ── Theme ─────────────────────────────────────────────
+  Future<AppThemeId> getTheme() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getString(_kTheme);
+    if (stored == null) return AppThemeId.obsidianGold;
+    return AppThemeId.values.firstWhere(
+          (t) => t.storageKey == stored,
+      orElse: () => AppThemeId.obsidianGold,
+    );
+  }
+
+  Future<void> setTheme(AppThemeId theme) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kTheme, theme.storageKey);
   }
 }

@@ -6,6 +6,8 @@ import '../../data/repositories/budget_repository.dart';
 import '../../data/repositories/wallet_repository.dart';
 import 'package:katonagari/core/services/preferences_service.dart';
 
+import '../theme/app_colors.dart';
+
 // Add this class above the provider:
 class InsightsSpendingData {
   final double totalIncome;
@@ -234,7 +236,7 @@ class LanguageNotifier extends StateNotifier<String> {
     state = lang;
   }
 }
- 
+
 // ── Preferences: Currency ──────────────────────────────────────────────────────
 /// Holds the current currency code ('IDR', 'USD', …).
 final currencyProvider =
@@ -256,5 +258,29 @@ class CurrencyNotifier extends StateNotifier<CurrencyInfo> {
   Future<void> setCurrency(String code) async {
     await PreferencesService.instance.setCurrencyCode(code);
     state = PreferencesService.currencyByCode(code);
+  }
+}
+
+final themeProvider =
+StateNotifierProvider<ThemeNotifier, AppThemeId>((ref) {
+  return ThemeNotifier();
+});
+
+class ThemeNotifier extends StateNotifier<AppThemeId> {
+  ThemeNotifier() : super(AppThemeId.obsidianGold) {
+    _load();
+  }
+
+  Future<void> _load() async {
+    final id = await PreferencesService.instance.getTheme();
+    // Apply colors before notifying so first build is already themed
+    AppColors.apply(AppThemeSchemes.forTheme(id));
+    state = id;
+  }
+
+  Future<void> setTheme(AppThemeId id) async {
+    AppColors.apply(AppThemeSchemes.forTheme(id));
+    await PreferencesService.instance.setTheme(id);
+    state = id;
   }
 }

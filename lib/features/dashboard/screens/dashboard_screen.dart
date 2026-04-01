@@ -667,9 +667,9 @@ class TxDetailSheet extends ConsumerWidget {
         .firstOrNull ?? '—';
 
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color:        AppColors.surfaceEl,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 40),
       child: Column(
