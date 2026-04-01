@@ -24,7 +24,12 @@ String _fmtAmount(String raw) {
 //  AddTransactionSheet
 // ─────────────────────────────────────────────────────────
 class AddTransactionSheet extends ConsumerStatefulWidget {
-  const AddTransactionSheet({super.key});
+  /// Pass an existing tx map to enter edit mode.
+  /// Must contain: 'id', 'amount', 'cat', 'catId', 'note',
+  /// 'oneTime', 'walletId', 'date'
+  final Map<String, dynamic>? existingTx;
+
+  const AddTransactionSheet({super.key, this.existingTx});
 
   @override
   ConsumerState<AddTransactionSheet> createState() =>
@@ -43,6 +48,8 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
   int?     _walletId;
   DateTime _selectedDate = DateTime.now();
 
+  bool get _isEditMode => widget.existingTx != null;
+
   final _scrollController = ScrollController();
   final _noteFocusNode    = FocusNode();
 
@@ -51,6 +58,22 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
   @override
   void initState() {
     super.initState();
+
+    // ── Pre-fill state when editing ──────────────────────────────────────────
+    final ex = widget.existingTx;
+    if (ex != null) {
+      final rawAmount = ex['amount'] as double;
+      final absAmt    = rawAmount.abs();
+      _amount       = absAmt.toInt().toString();
+      _type         = rawAmount > 0 ? 'income' : 'expense';
+      _note         = ex['note'] as String? ?? '';
+      _isOneTime    = ex['oneTime'] as bool? ?? false;
+      _walletId     = ex['walletId'] as int?;
+      _selectedDate = DateTime.parse(ex['date'] as String);
+      // Show the "more" panel if there is a note or it's one-time so user can see it
+      if (_note.isNotEmpty || _isOneTime) _showMore = true;
+    }
+
     _noteFocusNode.addListener(() {
       if (_noteFocusNode.hasFocus) {
         Future.delayed(const Duration(milliseconds: 350), () {
@@ -64,6 +87,26 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
         });
       }
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Resolve category after providers are available
+    final ex = widget.existingTx;
+    if (ex != null && _catId == null) {
+      final catId = ex['catId'];
+      if (catId != null) {
+        setState(() => _catId = catId.toString());
+      } else {
+        // Fallback: match by name
+        final catName = ex['cat'] as String?;
+        if (catName != null) {
+          final match = _cats.where((c) => c.name == catName).firstOrNull;
+          if (match != null) setState(() => _catId = match.id.toString());
+        }
+      }
+    }
   }
 
   @override
@@ -126,25 +169,59 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
       }
       if (effectiveWalletId == null || _catObj == null) return;
 
-      final txRepo = ref.read(transactionRepoProvider);
-      await txRepo.add(TransactionsCompanion.insert(
-        walletId:    effectiveWalletId,
-        categoryId:  _catObj!.id,
-        type:        _isIncome ? 'INCOME' : 'EXPENSE',
-        amount:      double.parse(_amount),
-        note:        drift.Value(_note.isEmpty ? null : _note),
-        date:        _selectedDate,
-        isOneTime:   drift.Value(_isOneTime),
-        isRecurring: drift.Value(_recurring != 'none'),
-      ));
+      final txRepo  = ref.read(transactionRepoProvider);
+      final newAmt  = double.parse(_amount);
 
-      final delta = _isIncome ? double.parse(_amount) : -double.parse(_amount);
-      await ref.read(walletRepoProvider).adjustBalance(effectiveWalletId, delta);
+      if (_isEditMode) {
+        // ── UPDATE existing transaction ──────────────────────────────────────
+        final ex       = widget.existingTx!;
+        final txId     = ex['id'] as int;
+        final oldAmt   = (ex['amount'] as double).abs();
+        final wasIncome = (ex['amount'] as double) > 0;
+        final oldWalletId = ex['walletId'] as int?;
+
+        // Reverse old wallet delta
+        if (oldWalletId != null) {
+          final reversal = wasIncome ? -oldAmt : oldAmt;
+          await ref.read(walletRepoProvider).adjustBalance(oldWalletId, reversal);
+        }
+        // Apply new wallet delta
+        final newDelta = _isIncome ? newAmt : -newAmt;
+        await ref.read(walletRepoProvider).adjustBalance(effectiveWalletId, newDelta);
+
+        // Update the transaction row
+        await txRepo.update(TransactionsCompanion(
+          id:          drift.Value(txId),
+          walletId:    drift.Value(effectiveWalletId),
+          categoryId:  drift.Value(_catObj!.id),
+          type:        drift.Value(_isIncome ? 'INCOME' : 'EXPENSE'),
+          amount:      drift.Value(newAmt),
+          note:        drift.Value(_note.isEmpty ? null : _note),
+          date:        drift.Value(_selectedDate),
+          isOneTime:   drift.Value(_isOneTime),
+          isRecurring: drift.Value(_recurring != 'none'),
+        ));
+      } else {
+        // ── INSERT new transaction ────────────────────────────────────────────
+        await txRepo.add(TransactionsCompanion.insert(
+          walletId:    effectiveWalletId,
+          categoryId:  _catObj!.id,
+          type:        _isIncome ? 'INCOME' : 'EXPENSE',
+          amount:      newAmt,
+          note:        drift.Value(_note.isEmpty ? null : _note),
+          date:        _selectedDate,
+          isOneTime:   drift.Value(_isOneTime),
+          isRecurring: drift.Value(_recurring != 'none'),
+        ));
+
+        final delta = _isIncome ? newAmt : -newAmt;
+        await ref.read(walletRepoProvider).adjustBalance(effectiveWalletId, delta);
+      }
 
       if (mounted) {
         Navigator.of(context).pop({
           'type':      _type,
-          'amount':    double.parse(_amount),
+          'amount':    newAmt,
           'catId':     _catObj!.id,
           'catName':   _catObj!.name,
           'catIcon':   _catObj!.icon,
@@ -171,7 +248,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
   @override
   Widget build(BuildContext context) {
     final wallets = ref.watch(walletProvider).valueOrNull ?? [];
-    final cur     = ref.currency; // ← read once here, pass down
+    final cur     = ref.currency;
     _maybeAutoSelect(wallets);
 
     final selectedWallet = wallets.where((w) => w.id == _walletId).firstOrNull;
@@ -232,60 +309,40 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
             Row(
               children: [
                 Text(
-                  _isIncome ? 'Add Income' : 'Add Expense',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 14, fontWeight: FontWeight.w600,
+                  _isIncome ? '＋' : '－',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: _isIncome
+                        ? AppColors.incomeGreen
+                        : AppColors.expenseRed,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                // Show "Edit Transaction" title when in edit mode
+                Text(
+                  _isEditMode ? 'Edit Transaction' : 'Add Transaction',
+                  style: GoogleFonts.dmSerifDisplay(
+                    fontSize: 16,
                     color: AppColors.textPrimary,
                   ),
                 ),
-                if (wallets.length > 1 && selectedWallet != null) ...[
-                  const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: () => setState(() => _mode = 'full'),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(selectedWallet.icon,
-                              style: const TextStyle(fontSize: 11)),
-                          const SizedBox(width: 4),
-                          Text(selectedWallet.name,
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 11, fontWeight: FontWeight.w600,
-                                color: AppColors.textMuted,
-                              )),
-                          const SizedBox(width: 3),
-                          Icon(Icons.unfold_more_rounded,
-                              size: 12, color: AppColors.textDim),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
               ],
             ),
 
           Row(
             children: [
-              if (wallets.isEmpty) ...[
+              if (_isEditMode) ...[
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
+                      horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: AppColors.expenseRed.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
+                    color: AppColors.accentDim,
+                    borderRadius: BorderRadius.circular(6),
                   ),
-                  child: Text('No account!',
+                  child: Text('Editing',
                       style: GoogleFonts.plusJakartaSans(
                           fontSize: 11,
-                          color: AppColors.expenseRed,
+                          color: AppColors.accent,
                           fontWeight: FontWeight.w600)),
                 ),
                 const SizedBox(width: 8),
@@ -329,7 +386,10 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
           child: _SaveButton(
-              canSave: _canSave, hasAmount: _hasAmount, onSave: _onSave),
+              canSave: _canSave,
+              hasAmount: _hasAmount,
+              onSave: _onSave,
+              isEditMode: _isEditMode),
         ),
       ],
     );
@@ -454,7 +514,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
                   ],
                   Text(
                     _canSave
-                        ? 'Save Transaction'
+                        ? (_isEditMode ? 'Update Transaction' : 'Save Transaction')
                         : _hasAmount
                         ? 'Pick a category'
                         : 'Enter amount & category',
@@ -536,7 +596,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
                           )),
                       if (w.balance > 0)
                         Text(
-                          cur.format(w.balance), // ← was _fmtRp(w.balance)
+                          cur.format(w.balance),
                           style: GoogleFonts.dmMono(
                             fontSize: 10,
                             color: selected
@@ -641,9 +701,11 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
             )),
         const SizedBox(height: 8),
         TextField(
-          focusNode: _noteFocusNode,
-          onChanged: (v) => setState(() => _note = v),
-          maxLength: 100,
+          focusNode:  _noteFocusNode,
+          controller: TextEditingController(text: _note)
+            ..selection = TextSelection.collapsed(offset: _note.length),
+          onChanged:  (v) => _note = v,
+          maxLength:  100,
           style: GoogleFonts.plusJakartaSans(
               fontSize: 13, color: AppColors.textPrimary),
           decoration: InputDecoration(
@@ -663,8 +725,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide:
-              BorderSide(color: AppColors.accent, width: 1.5),
+              borderSide: BorderSide(color: AppColors.accent, width: 1.5),
             ),
             contentPadding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -765,7 +826,6 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
           crossAxisAlignment: CrossAxisAlignment.baseline,
           textBaseline: TextBaseline.alphabetic,
           children: [
-            // ← cur.symbol instead of hardcoded 'Rp'
             Text(cur.symbol,
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 18, fontWeight: FontWeight.w500,
@@ -816,7 +876,6 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
       crossAxisAlignment: CrossAxisAlignment.baseline,
       textBaseline: TextBaseline.alphabetic,
       children: [
-        // ← cur.symbol instead of hardcoded 'Rp'
         Text(cur.symbol,
             style: GoogleFonts.plusJakartaSans(
               fontSize: 16, fontWeight: FontWeight.w500,
@@ -876,47 +935,29 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
               ),
             ),
           );
-        }).toList()
-          ..add(
-            GestureDetector(
-              onTap: () => setState(() => _mode = 'full'),
-              child: Container(
-                margin: const EdgeInsets.only(right: 8),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Text('All',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 12, fontWeight: FontWeight.w600,
-                      color: AppColors.textMuted,
-                    )),
-              ),
-            ),
-          ),
+        }).toList(),
       ),
     );
   }
 
   // ── Category Grid (full mode) ────────────────────────────────────────────────
   Widget _buildCategoryGrid() {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+    return GridView.count(
+      crossAxisCount:   4,
+      shrinkWrap:       true,
+      physics:          const NeverScrollableScrollPhysics(),
+      crossAxisSpacing: 8,
+      mainAxisSpacing:  8,
+      childAspectRatio: 1,
       children: _cats.map((c) {
         final selected = _catId == c.id.toString();
         return GestureDetector(
           onTap: () => setState(() => _catId = c.id.toString()),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
-            width: 74,
-            padding: const EdgeInsets.symmetric(vertical: 10),
             decoration: BoxDecoration(
               color: selected ? AppColors.accentDim : AppColors.surface,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: selected ? AppColors.accent : AppColors.border,
                 width: selected ? 1.5 : 1,
@@ -1026,12 +1067,13 @@ class _NumKeyState extends State<_NumKey> {
 //  Save Button
 // ─────────────────────────────────────────────────────────
 class _SaveButton extends StatelessWidget {
-  final bool canSave, hasAmount;
+  final bool canSave, hasAmount, isEditMode;
   final VoidCallback onSave;
   const _SaveButton({
     required this.canSave,
     required this.hasAmount,
     required this.onSave,
+    required this.isEditMode,
   });
 
   @override
@@ -1059,7 +1101,7 @@ class _SaveButton extends StatelessWidget {
             ],
             Text(
               canSave
-                  ? 'Save'
+                  ? (isEditMode ? 'Update' : 'Save')
                   : hasAmount
                   ? 'Pick a category'
                   : 'Enter amount',

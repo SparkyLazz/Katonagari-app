@@ -9,6 +9,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/providers/providers.dart';
 import '../../../data/database/app_database.dart';
 import '../../../core/widgets/month_picker_sheet.dart';
+import 'add_transaction_sheet.dart';
+import 'dart:ui'; // for ImageFilter
 
 // ─────────────────────────────────────────────────────────
 //  DashboardScreen
@@ -43,11 +45,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
 
     Future.delayed(const Duration(milliseconds: 150),
-        () { if (mounted) setState(() => _phase = 1); });
+            () { if (mounted) setState(() => _phase = 1); });
     Future.delayed(const Duration(milliseconds: 400),
-        () { if (mounted) setState(() => _phase = 2); });
+            () { if (mounted) setState(() => _phase = 2); });
     Future.delayed(const Duration(milliseconds: 700),
-        () { if (mounted) setState(() => _phase = 3); });
+            () { if (mounted) setState(() => _phase = 3); });
   }
 
   void _animateBalance(double target) {
@@ -101,11 +103,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     final txAsync      = ref.watch(transactionsProvider);
     final totalsAsync  = ref.watch(monthlyTotalsProvider);
     final balanceAsync = ref.watch(totalBalanceProvider);
-    final cur          = ref.currency; // ← single read, passed everywhere
+    final cur          = ref.currency;
 
     ref.listen<AsyncValue<double>>(
       totalBalanceProvider,
-      (_, next) => _animateBalance(next.valueOrNull ?? 0.0),
+          (_, next) => _animateBalance(next.valueOrNull ?? 0.0),
     );
 
     final transactions = txAsync.valueOrNull ?? <TransactionWithCategory>[];
@@ -118,10 +120,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     final today = DateTime.now();
     final todaySpent = transactions
         .where((t) =>
-            t.transaction.type == 'EXPENSE' &&
-            t.transaction.date.year  == today.year &&
-            t.transaction.date.month == today.month &&
-            t.transaction.date.day   == today.day)
+    t.transaction.type == 'EXPENSE' &&
+        t.transaction.date.year  == today.year &&
+        t.transaction.date.month == today.month &&
+        t.transaction.date.day   == today.day)
         .fold(0.0, (s, t) => s + t.transaction.amount);
 
     return Scaffold(
@@ -245,51 +247,68 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         offset:   _phase >= 1 ? Offset.zero : const Offset(0, 0.3),
         duration: const Duration(milliseconds: 500),
         curve:    Curves.easeOutCubic,
-        child: Container(
-          margin:  const EdgeInsets.fromLTRB(24, 24, 24, 0),
-          padding: const EdgeInsets.all(22),
-          decoration: BoxDecoration(
-            color:        AppColors.surface,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+          child: ClipRRect(
             borderRadius: BorderRadius.circular(18),
-            border:       Border.all(color: AppColors.border),
-          ),
-          child: Stack(
-            children: [
-              Positioned(
-                top: -40, right: -40,
-                child: Container(
-                  width: 140, height: 140,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [
-                        AppColors.accent.withOpacity(0.10),
-                        Colors.transparent,
-                      ],
+            child: Stack(
+              children: [
+                // ── Accent glow ──────────────────────────────────────────────
+                Positioned(
+                  top: -40, right: -40,
+                  child: Container(
+                    width: 140, height: 140,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          AppColors.accent.withOpacity(0.10),
+                          Colors.transparent,
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Total Balance',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 11, fontWeight: FontWeight.w500,
-                        color: AppColors.textMuted, letterSpacing: 0.5,
-                      )),
 
-                  const SizedBox(height: 10),
+                // ── Frosted glass card ────────────────────────────────────────
+                BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                  child: Container(
+                    padding: const EdgeInsets.all(22),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end:   Alignment.bottomRight,
+                        colors: [
+                          AppColors.surface.withOpacity(0.65),
+                          AppColors.surface.withOpacity(0.35),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: AppColors.border.withOpacity(0.6),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Total Balance',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 11, fontWeight: FontWeight.w500,
+                              color: AppColors.textMuted, letterSpacing: 0.5,
+                            )),
 
-                  isLoading
-                      ? Container(
+                        const SizedBox(height: 10),
+
+                        isLoading
+                            ? Container(
                           width: 180, height: 40,
                           decoration: BoxDecoration(
                             color: AppColors.surfaceEl,
                             borderRadius: BorderRadius.circular(8),
                           ),
                         )
-                      : AnimatedBuilder(
+                            : AnimatedBuilder(
                           animation: _balanceAnim,
                           builder: (_, __) {
                             final val   = _balanceAnim.value;
@@ -307,30 +326,33 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                           },
                         ),
 
-                  const SizedBox(height: 16),
+                        const SizedBox(height: 16),
 
-                  Row(
-                    children: [
-                      _StatPill(
-                        icon:   Icons.arrow_upward_rounded,
-                        amount: totalIncome,
-                        color:  AppColors.incomeGreen,
-                        bg:     AppColors.incomeGreenDim,
-                        cur:    cur,
-                      ),
-                      const SizedBox(width: 10),
-                      _StatPill(
-                        icon:   Icons.arrow_downward_rounded,
-                        amount: totalExpense,
-                        color:  AppColors.expenseRed,
-                        bg:     AppColors.expenseRedDim,
-                        cur:    cur,
-                      ),
-                    ],
+                        Row(
+                          children: [
+                            _StatPill(
+                              icon:   Icons.arrow_upward_rounded,
+                              amount: totalIncome,
+                              color:  AppColors.incomeGreen,
+                              bg:     AppColors.incomeGreenDim,
+                              cur:    cur,
+                            ),
+                            const SizedBox(width: 10),
+                            _StatPill(
+                              icon:   Icons.arrow_downward_rounded,
+                              amount: totalExpense,
+                              color:  AppColors.expenseRed,
+                              bg:     AppColors.expenseRedDim,
+                              cur:    cur,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -472,44 +494,46 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               )
             else
               ...grouped.entries.map((entry) => Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12, bottom: 6),
-                        child: Text(entry.key,
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 11, fontWeight: FontWeight.w600,
-                              color: AppColors.textDim, letterSpacing: 0.5,
-                            )),
-                      ),
-                      ...entry.value.map((item) => _TxRowFromDb(
-                            item: item,
-                            onTap: () => showModalBottomSheet(
-                              context: context,
-                              backgroundColor: Colors.transparent,
-                              isScrollControlled: true,
-                              builder: (_) => TxDetailSheet(tx: {
-                                'icon':     item.category.icon,
-                                'name':     item.transaction.note?.isNotEmpty == true
-                                                ? item.transaction.note!
-                                                : item.category.name,
-                                'cat':      item.category.name,
-                                'amount':   item.transaction.type == 'INCOME'
-                                                ? item.transaction.amount
-                                                : -item.transaction.amount,
-                                'date':     item.transaction.date
-                                                .toIso8601String()
-                                                .split('T')[0],
-                                'time':     DateFormat('HH:mm')
-                                                .format(item.transaction.date),
-                                'note':     item.transaction.note ?? '',
-                                'oneTime':  item.transaction.isOneTime,
-                                'walletId': item.transaction.walletId,
-                              }),
-                            ),
-                          )),
-                    ],
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12, bottom: 6),
+                    child: Text(entry.key,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11, fontWeight: FontWeight.w600,
+                          color: AppColors.textDim, letterSpacing: 0.5,
+                        )),
+                  ),
+                  ...entry.value.map((item) => _TxRowFromDb(
+                    item: item,
+                    onTap: () => showModalBottomSheet(
+                      context: context,
+                      backgroundColor: Colors.transparent,
+                      isScrollControlled: true,
+                      builder: (_) => TxDetailSheet(tx: {
+                        'id':       item.transaction.id,       // ← required for edit/delete
+                        'icon':     item.category.icon,
+                        'name':     item.transaction.note?.isNotEmpty == true
+                            ? item.transaction.note!
+                            : item.category.name,
+                        'cat':      item.category.name,
+                        'catId':    item.category.id,          // ← required for edit prefill
+                        'amount':   item.transaction.type == 'INCOME'
+                            ? item.transaction.amount
+                            : -item.transaction.amount,
+                        'date':     item.transaction.date
+                            .toIso8601String()
+                            .split('T')[0],
+                        'time':     DateFormat('HH:mm')
+                            .format(item.transaction.date),
+                        'note':     item.transaction.note ?? '',
+                        'oneTime':  item.transaction.isOneTime,
+                        'walletId': item.transaction.walletId,
+                      }),
+                    ),
                   )),
+                ],
+              )),
           ],
         ),
       ),
@@ -518,7 +542,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 }
 
 // ─────────────────────────────────────────────────────────
-//  Stat Pill  — ConsumerWidget so it reads currencyProvider
+//  Stat Pill
 // ─────────────────────────────────────────────────────────
 class _StatPill extends StatelessWidget {
   final IconData     icon;
@@ -555,7 +579,7 @@ class _StatPill extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────
-//  Transaction Row — ConsumerWidget to read currencyProvider
+//  Transaction Row
 // ─────────────────────────────────────────────────────────
 class _TxRowFromDb extends ConsumerWidget {
   final TransactionWithCategory item;
@@ -587,15 +611,15 @@ class _TxRowFromDb extends ConsumerWidget {
               decoration: BoxDecoration(
                 color: isLarge
                     ? (isIncome
-                        ? AppColors.incomeGreenDim
-                        : AppColors.expenseRedDim)
+                    ? AppColors.incomeGreenDim
+                    : AppColors.expenseRedDim)
                     : AppColors.surface,
                 borderRadius: BorderRadius.circular(isLarge ? 14 : 11),
                 border: Border.all(
                   color: isLarge
                       ? (isIncome
-                          ? AppColors.incomeGreen.withOpacity(0.2)
-                          : AppColors.expenseRed.withOpacity(0.2))
+                      ? AppColors.incomeGreen.withOpacity(0.2)
+                      : AppColors.expenseRed.withOpacity(0.2))
                       : AppColors.border,
                 ),
               ),
@@ -739,7 +763,7 @@ class TxDetailSheet extends ConsumerWidget {
 
           const SizedBox(height: 20),
 
-          // Amount — uses live currency
+          // Amount
           Align(
             alignment: Alignment.centerLeft,
             child: Text(
@@ -771,41 +795,125 @@ class TxDetailSheet extends ConsumerWidget {
 
           const SizedBox(height: 20),
 
-          // Actions
+          // ── Actions ─────────────────────────────────────────────────────────
           Row(
             children: [
+              // Edit Button
               Expanded(
-                child: Container(
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color:        AppColors.surface,
-                    borderRadius: BorderRadius.circular(12),
-                    border:       Border.all(color: AppColors.border),
+                child: GestureDetector(
+                  onTap: () {
+                    Navigator.pop(context);
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => AddTransactionSheet(existingTx: tx),
+                    );
+                  },
+                  child: Container(
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color:        AppColors.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border:       Border.all(color: AppColors.border),
+                    ),
+                    alignment: Alignment.center,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.edit_outlined,
+                            size: 15, color: AppColors.textSecondary),
+                        const SizedBox(width: 6),
+                        Text('Edit',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 14, fontWeight: FontWeight.w600,
+                              color: AppColors.textSecondary,
+                            )),
+                      ],
+                    ),
                   ),
-                  alignment: Alignment.center,
-                  child: Text('Edit',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 14, fontWeight: FontWeight.w600,
-                        color: AppColors.textSecondary,
-                      )),
                 ),
               ),
               const SizedBox(width: 10),
+              // Delete Button
               Expanded(
-                child: Container(
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color:  AppColors.expenseRedDim,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                        color: AppColors.expenseRed.withOpacity(0.2)),
+                child: GestureDetector(
+                  onTap: () async {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (_) => AlertDialog(
+                        backgroundColor: AppColors.surfaceEl,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18)),
+                        title: Text('Delete transaction?',
+                            style: GoogleFonts.dmSerifDisplay(
+                                fontSize: 18, color: AppColors.textPrimary)),
+                        content: Text('This action cannot be undone.',
+                            style: GoogleFonts.plusJakartaSans(
+                                fontSize: 13,
+                                color: AppColors.textSecondary)),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: Text('Cancel',
+                                style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 13,
+                                    color: AppColors.textMuted)),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: Text('Delete',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.expenseRed,
+                                )),
+                          ),
+                        ],
+                      ),
+                    );
+
+                    if (confirmed == true) {
+                      final txId   = tx['id'] as int;
+                      final wId    = tx['walletId'] as int?;
+                      final amt    = (tx['amount'] as double).abs();
+
+                      if (wId != null) {
+                        final delta = isIncome ? -amt : amt;
+                        await ref
+                            .read(walletRepoProvider)
+                            .adjustBalance(wId, delta);
+                      }
+                      await ref
+                          .read(transactionRepoProvider)
+                          .delete(txId);
+
+                      if (context.mounted) Navigator.pop(context);
+                    }
+                  },
+                  child: Container(
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color:        AppColors.expenseRedDim,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: AppColors.expenseRed.withOpacity(0.2)),
+                    ),
+                    alignment: Alignment.center,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.delete_outline_rounded,
+                            size: 15, color: AppColors.expenseRed),
+                        const SizedBox(width: 6),
+                        Text('Delete',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 14, fontWeight: FontWeight.w600,
+                              color: AppColors.expenseRed,
+                            )),
+                      ],
+                    ),
                   ),
-                  alignment: Alignment.center,
-                  child: Text('Delete',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 14, fontWeight: FontWeight.w600,
-                        color: AppColors.expenseRed,
-                      )),
                 ),
               ),
             ],
@@ -816,9 +924,9 @@ class TxDetailSheet extends ConsumerWidget {
   }
 
   String _monthName(int m) => [
-        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-      ][m - 1];
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ][m - 1];
 }
 
 // ─────────────────────────────────────────────────────────
@@ -859,7 +967,7 @@ class DetailCell extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────
-//  Budget Card — receives cur from parent
+//  Budget Card
 // ─────────────────────────────────────────────────────────
 class _RealBudgetCard extends StatefulWidget {
   final BudgetWithSpending data;
