@@ -500,7 +500,7 @@ class _SpendingView extends ConsumerWidget {
                                     color: AppColors.textMuted)),
                             const SizedBox(width: 6),
                             SizedBox(
-                              width: 36,
+                              width: 48,
                               child: Text(
                                 '${cat.pct.toStringAsFixed(1)}%',
                                 textAlign: TextAlign.right,

@@ -27,7 +27,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
   @override
   bool get wantKeepAlive => true;
-
   late AnimationController _ctrl;
   late Animation<double> _balanceAnim;
   int    _phase       = 0;
@@ -99,7 +98,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-
     final txAsync      = ref.watch(transactionsProvider);
     final totalsAsync  = ref.watch(monthlyTotalsProvider);
     final balanceAsync = ref.watch(totalBalanceProvider);
@@ -110,11 +108,31 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           (_, next) => _animateBalance(next.valueOrNull ?? 0.0),
     );
 
+    ref.listen<AppThemeId>(
+      themeProvider,
+          (_, __) {
+        // Theme changed — re-drive the animation so the
+        // balance card doesn't show 0 after a rebuild.
+        final current = ref.read(totalBalanceProvider).valueOrNull ?? 0.0;
+        _lastBalance = 0; // reset so _animateBalance doesn't skip
+        _animateBalance(current);
+      },
+    );
+
     final transactions = txAsync.valueOrNull ?? <TransactionWithCategory>[];
     final totals       = totalsAsync.valueOrNull ?? {'income': 0.0, 'expense': 0.0};
     final totalIncome  = totals['income']  ?? 0.0;
     final totalExpense = totals['expense'] ?? 0.0;
     final balance      = balanceAsync.valueOrNull ?? 0.0;
+    if (_lastBalance != balance && !_ctrl.isAnimating) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _animateBalance(balance);
+      });
+    }
+    ref.listen<AsyncValue<double>>(
+      totalBalanceProvider,
+          (_, next) => _animateBalance(next.valueOrNull ?? 0.0),
+    );
     final isLoading    = txAsync.isLoading || totalsAsync.isLoading || balanceAsync.isLoading;
 
     final today = DateTime.now();
@@ -125,6 +143,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         t.transaction.date.month == today.month &&
         t.transaction.date.day   == today.day)
         .fold(0.0, (s, t) => s + t.transaction.amount);
+
+
 
     return Scaffold(
       backgroundColor: AppColors.bg,

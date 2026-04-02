@@ -29,9 +29,9 @@ class WalletRepository {
   /// Adds [delta] to the wallet's current balance.
   /// Pass a positive delta for INCOME, negative for EXPENSE.
   Future<void> adjustBalance(int walletId, double delta) async {
-    final wallet = await getById(walletId);
+    final wallet = await getById(walletId);  // ← async read
     if (wallet == null) return;
-    await update(
+    await update(                             // ← async write
       wallet.toCompanion(false).copyWith(
         balance: Value(wallet.balance + delta),
       ),

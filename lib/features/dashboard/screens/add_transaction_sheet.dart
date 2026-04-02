@@ -52,6 +52,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
 
   final _scrollController = ScrollController();
   final _noteFocusNode    = FocusNode();
+  final _noteFieldKey     = GlobalKey();
 
   bool get _isIncome => _type == 'income';
 
@@ -76,12 +77,16 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
 
     _noteFocusNode.addListener(() {
       if (_noteFocusNode.hasFocus) {
+        // Wait for keyboard to fully animate in (~300ms), then
+        // scroll exactly so the note field is visible above it.
         Future.delayed(const Duration(milliseconds: 350), () {
-          if (_scrollController.hasClients) {
-            _scrollController.animateTo(
-              _scrollController.position.maxScrollExtent,
+          final ctx = _noteFieldKey.currentContext;
+          if (ctx != null) {
+            Scrollable.ensureVisible(
+              ctx,
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeOut,
+              alignment: 0.9,  // bring field near bottom of visible area
             );
           }
         });
@@ -701,6 +706,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
             )),
         const SizedBox(height: 8),
         TextField(
+          key:       _noteFieldKey,
           focusNode:  _noteFocusNode,
           controller: TextEditingController(text: _note)
             ..selection = TextSelection.collapsed(offset: _note.length),

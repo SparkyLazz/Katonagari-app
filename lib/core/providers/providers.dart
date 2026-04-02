@@ -213,7 +213,7 @@ final budgetsWithSpendingProvider =
 
 final totalBalanceProvider = StreamProvider<double>((ref) {
   return ref.watch(walletProvider.stream).map(
-    (wallets) => wallets.fold(0.0, (sum, w) => sum + w.balance),
+        (wallets) => wallets.fold(0.0, (sum, w) => sum + w.balance),
   );
 });
 
