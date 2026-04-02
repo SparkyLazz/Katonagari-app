@@ -173,7 +173,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                               style: GoogleFonts.dmSerifDisplay(
                                   fontSize: 13, color: AppColors.textGhost)),
                           const SizedBox(height: 2),
-                          Text('v1.1.0',
+                          Text('v1.3.0',
                               style: GoogleFonts.plusJakartaSans(
                                   fontSize: 10, color: AppColors.textGhost)),
                         ],

@@ -1,7 +1,7 @@
 name: katonagari
 description: Know your money — personal finance tracker
 publish_to: 'none'
-version: 1.1.0+2
+version: 1.5.0+5
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
