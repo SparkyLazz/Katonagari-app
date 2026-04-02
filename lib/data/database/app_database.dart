@@ -59,6 +59,19 @@ class Goals extends Table {
   DateTimeColumn get createdAt    => dateTime().withDefault(currentDateAndTime)();
 }
 
+// ── NEW in v3 ─────────────────────────────────────────
+class Debts extends Table {
+  IntColumn      get id         => integer().autoIncrement()();
+  /// 'OWE' = you owe someone, 'OWED' = someone owes you
+  TextColumn     get type       => text()();
+  TextColumn     get personName => text()();
+  RealColumn     get amount     => real()();
+  DateTimeColumn get dueDate    => dateTime().nullable()();
+  TextColumn     get note       => text().nullable()();
+  BoolColumn     get isPaid     => boolean().withDefault(const Constant(false))();
+  DateTimeColumn get createdAt  => dateTime().withDefault(currentDateAndTime)();
+}
+
 // ─── Joined result classes — OUTSIDE AppDatabase ──────
 
 class TransactionWithCategory {
@@ -85,12 +98,12 @@ class BudgetWithSpending {
 
 // ─── Database ─────────────────────────────────────────
 
-@DriftDatabase(tables: [Wallets, Categories, Transactions, Budgets, Goals])
+@DriftDatabase(tables: [Wallets, Categories, Transactions, Budgets, Goals, Debts])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -101,6 +114,9 @@ class AppDatabase extends _$AppDatabase {
     onUpgrade: (m, from, to) async {
       if (from < 2) {
         await m.createTable($GoalsTable(this));
+      }
+      if (from < 3) {
+        await m.createTable($DebtsTable(this));
       }
     },
   );
@@ -186,6 +202,13 @@ class AppDatabase extends _$AppDatabase {
   Stream<List<Goal>> watchGoals() {
     return (select(goals)
       ..orderBy([(g) => OrderingTerm.asc(g.createdAt)]))
+        .watch();
+  }
+
+  // ── watchDebts ─────────────────────────────────────────
+  Stream<List<Debt>> watchDebts() {
+    return (select(debts)
+      ..orderBy([(d) => OrderingTerm.desc(d.createdAt)]))
         .watch();
   }
 

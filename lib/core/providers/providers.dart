@@ -7,6 +7,7 @@ import '../../data/repositories/wallet_repository.dart';
 import 'package:katonagari/core/services/preferences_service.dart';
 import '../../data/repositories/goal_repository.dart';
 import '../theme/app_colors.dart';
+import '../../data/repositories/debt_repository.dart';
 
 // Add this class above the provider:
 class InsightsSpendingData {
@@ -163,6 +164,14 @@ final goalRepoProvider = Provider<GoalRepository>((ref) {
 // ── Goals stream ──
 final goalsProvider = StreamProvider<List<Goal>>((ref) {
   return ref.watch(goalRepoProvider).watchAll();
+});
+
+final debtRepoProvider = Provider<DebtRepository>((ref) {
+  return DebtRepository(ref.watch(databaseProvider));
+});
+
+final debtsProvider = StreamProvider<List<Debt>>((ref) {
+  return ref.watch(debtRepoProvider).watchAll();
 });
 
 // ── Transactions stream ──
