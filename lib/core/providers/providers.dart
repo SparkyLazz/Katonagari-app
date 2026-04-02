@@ -5,7 +5,7 @@ import '../../data/repositories/category_repository.dart';
 import '../../data/repositories/budget_repository.dart';
 import '../../data/repositories/wallet_repository.dart';
 import 'package:katonagari/core/services/preferences_service.dart';
-
+import '../../data/repositories/goal_repository.dart';
 import '../theme/app_colors.dart';
 
 // Add this class above the provider:
@@ -153,6 +153,16 @@ final walletRepoProvider = Provider<WalletRepository>((ref) {
 final selectedMonthProvider = StateProvider<DateTime>((ref) {
   final now = DateTime.now();
   return DateTime(now.year, now.month);
+});
+
+// ── Goal repo ──
+final goalRepoProvider = Provider<GoalRepository>((ref) {
+  return GoalRepository(ref.watch(databaseProvider));
+});
+
+// ── Goals stream ──
+final goalsProvider = StreamProvider<List<Goal>>((ref) {
+  return ref.watch(goalRepoProvider).watchAll();
 });
 
 // ── Transactions stream ──

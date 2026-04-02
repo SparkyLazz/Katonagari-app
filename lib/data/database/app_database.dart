@@ -49,7 +49,18 @@ class Budgets extends Table {
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
-// ─── Joined result class — OUTSIDE AppDatabase ────────
+class Goals extends Table {
+  IntColumn      get id           => integer().autoIncrement()();
+  TextColumn     get name         => text()();
+  TextColumn     get icon         => text().withDefault(const Constant('🎯'))();
+  RealColumn     get targetAmount => real()();
+  RealColumn     get savedAmount  => real().withDefault(const Constant(0))();
+  DateTimeColumn get targetDate   => dateTime().nullable()();
+  DateTimeColumn get createdAt    => dateTime().withDefault(currentDateAndTime)();
+}
+
+// ─── Joined result classes — OUTSIDE AppDatabase ──────
+
 class TransactionWithCategory {
   final Transaction transaction;
   final Category category;
@@ -66,20 +77,20 @@ class BudgetWithSpending {
     required this.spent,
   });
 
-  double get pct => spent / budget.amount;
-  bool get isOver => pct >= 1.0;
-  bool get isWarn => pct >= 0.8 && !isOver;
+  double get pct      => spent / budget.amount;
+  bool   get isOver   => pct >= 1.0;
+  bool   get isWarn   => pct >= 0.8 && !isOver;
   double get remaining => budget.amount - spent;
 }
 
 // ─── Database ─────────────────────────────────────────
 
-@DriftDatabase(tables: [Wallets, Categories, Transactions, Budgets])
+@DriftDatabase(tables: [Wallets, Categories, Transactions, Budgets, Goals])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -87,9 +98,14 @@ class AppDatabase extends _$AppDatabase {
       await m.createAll();
       await _seedDefaults();
     },
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        await m.createTable($GoalsTable(this));
+      }
+    },
   );
 
-  // ── watchTransactionsWithCategory — INSIDE AppDatabase ──
+  // ── watchTransactionsWithCategory ──────────────────────
   Stream<List<TransactionWithCategory>> watchTransactionsWithCategory({
     int? month,
     int? year,
@@ -120,10 +136,63 @@ class AppDatabase extends _$AppDatabase {
     }).toList());
   }
 
-  // ── Seed defaults ──
+  // ── watchBudgetsWithSpending ───────────────────────────
+  Stream<List<BudgetWithSpending>> watchBudgetsWithSpending({
+    required int month,
+    required int year,
+  }) {
+    final start = DateTime(year, month, 1);
+    final end   = DateTime(year, month + 1, 0, 23, 59, 59);
+
+    final budgetStream = (select(budgets).join([
+      innerJoin(categories, categories.id.equalsExp(budgets.categoryId)),
+    ])..where(budgets.month.equals(month) & budgets.year.equals(year)))
+        .watch();
+
+    final txStream = (select(transactions)
+      ..where((t) =>
+      t.type.equals('EXPENSE') &
+      t.date.isBetweenValues(start, end)))
+        .watch();
+
+    return Rx.combineLatest2(
+      budgetStream,
+      txStream,
+          (List<TypedResult> budgetRows, List<Transaction> txRows) {
+        final spendMap = <int, double>{};
+        for (final tx in txRows) {
+          spendMap[tx.categoryId] =
+              (spendMap[tx.categoryId] ?? 0) + tx.amount;
+        }
+
+        final result = budgetRows.map((row) {
+          final budget = row.readTable(budgets);
+          final cat    = row.readTable(categories);
+          final spent  = spendMap[cat.id] ?? 0.0;
+          return BudgetWithSpending(
+            budget:   budget,
+            category: cat,
+            spent:    spent,
+          );
+        }).toList();
+
+        result.sort((a, b) => b.pct.compareTo(a.pct));
+        return result;
+      },
+    );
+  }
+
+  // ── watchGoals ─────────────────────────────────────────
+  Stream<List<Goal>> watchGoals() {
+    return (select(goals)
+      ..orderBy([(g) => OrderingTerm.asc(g.createdAt)]))
+        .watch();
+  }
+
+  // ── Seed defaults ──────────────────────────────────────
   Future<void> _seedDefaults() async {
     await into(wallets).insert(WalletsCompanion.insert(
-      name: 'Cash',
+      name:    'Cash',
       balance: const Value(0),
     ));
 
@@ -142,10 +211,10 @@ class AppDatabase extends _$AppDatabase {
 
     for (final c in expenseCategories) {
       await into(categories).insert(CategoriesCompanion.insert(
-        name: c.$1,
-        type: 'EXPENSE',
-        icon: c.$2,
-        color: Value(c.$3),
+        name:      c.$1,
+        type:      'EXPENSE',
+        icon:      c.$2,
+        color:     Value(c.$3),
         isDefault: const Value(true),
       ));
     }
@@ -159,68 +228,20 @@ class AppDatabase extends _$AppDatabase {
 
     for (final c in incomeCategories) {
       await into(categories).insert(CategoriesCompanion.insert(
-        name: c.$1,
-        type: 'INCOME',
-        icon: c.$2,
-        color: Value(c.$3),
+        name:      c.$1,
+        type:      'INCOME',
+        icon:      c.$2,
+        color:     Value(c.$3),
         isDefault: const Value(true),
       ));
     }
   }
-  Stream<List<BudgetWithSpending>> watchBudgetsWithSpending({
-  required int month,
-  required int year,
-}) {
-  final start = DateTime(year, month, 1);
-  final end   = DateTime(year, month + 1, 0, 23, 59, 59);
-
-  // Live stream of budgets + categories for this month
-  final budgetStream = (select(budgets).join([
-    innerJoin(categories, categories.id.equalsExp(budgets.categoryId)),
-  ])..where(budgets.month.equals(month) & budgets.year.equals(year)))
-      .watch();
-
-  // Live stream of expense transactions for this month
-  final txStream = (select(transactions)
-        ..where((t) =>
-            t.type.equals('EXPENSE') &
-            t.date.isBetweenValues(start, end)))
-      .watch();
-
-  // Combine both streams — re-emits whenever EITHER changes
-  return Rx.combineLatest2(
-    budgetStream,
-    txStream,
-    (List<TypedResult> budgetRows, List<Transaction> txRows) {
-      // Build a spending map: categoryId → total spent
-      final spendMap = <int, double>{};
-      for (final tx in txRows) {
-        spendMap[tx.categoryId] =
-            (spendMap[tx.categoryId] ?? 0) + tx.amount;
-      }
-
-      final result = budgetRows.map((row) {
-        final budget = row.readTable(budgets);
-        final cat    = row.readTable(categories);
-        final spent  = spendMap[cat.id] ?? 0.0;
-        return BudgetWithSpending(
-          budget: budget,
-          category: cat,
-          spent: spent,
-        );
-      }).toList();
-
-      result.sort((a, b) => b.pct.compareTo(a.pct));
-      return result;
-    },
-  );
-}
 }
 
 // ─── Connection ───────────────────────────────────────
 LazyDatabase _openConnection() {
   return LazyDatabase(() async {
-    final dir = await getApplicationDocumentsDirectory();
+    final dir  = await getApplicationDocumentsDirectory();
     final file = File(p.join(dir.path, 'katonagari.db'));
     return NativeDatabase.createInBackground(file);
   });

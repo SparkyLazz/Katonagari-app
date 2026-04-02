@@ -10,6 +10,7 @@ import '../../../core/services/preferences_service.dart';
 import '../../../data/database/app_database.dart';
 import 'set_budget_sheet.dart';
 import '../../../core/widgets/month_picker_sheet.dart';
+import 'add_goal_sheet.dart';
 
 // ── Previous-month category spending provider ─────────────────────────────────
 // Returns a map of categoryId → amount for the month BEFORE selectedMonth.
@@ -71,10 +72,10 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen>
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 300),
                 child: _view == 'spending'
-                    ? _SpendingView(
-                    key: const ValueKey('spending'), phase: _phase)
-                    : _BudgetsView(
-                    key: const ValueKey('budgets'), phase: _phase),
+                    ? _SpendingView(key: const ValueKey('spending'), phase: _phase)
+                    : _view == 'budgets'
+                    ? _BudgetsView(key: const ValueKey('budgets'),  phase: _phase)
+                    : _GoalsView(key: const ValueKey('goals'),      phase: _phase),
               ),
             ),
           ],
@@ -156,6 +157,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen>
                 children: [
                   {'id': 'spending', 'label': 'Spending', 'icon': '📊'},
                   {'id': 'budgets',  'label': 'Budgets',  'icon': '🎯'},
+                  {'id': 'goals',    'label': 'Goals',    'icon': '⭐'},
                 ].map((v) {
                   final active = _view == v['id'];
                   return Expanded(
@@ -1654,7 +1656,359 @@ class _BudgetsViewState extends ConsumerState<_BudgetsView> {
     );
   }
 }
+// ── GOALS VIEW ────────────────────────────────────────────────────────────────
+class _GoalsView extends ConsumerWidget {
+  final int phase;
+  const _GoalsView({super.key, required this.phase});
 
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final goalsAsync = ref.watch(goalsProvider);
+    final goals      = goalsAsync.valueOrNull ?? [];
+    final cur        = ref.currency;
+
+    return Stack(
+      children: [
+        goals.isEmpty
+            ? Center(
+          child: AnimatedOpacity(
+            opacity:  phase >= 1 ? 1 : 0,
+            duration: const Duration(milliseconds: 300),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('⭐', style: TextStyle(fontSize: 40)),
+                const SizedBox(height: 12),
+                Text('No goals yet',
+                    style: GoogleFonts.dmSerifDisplay(
+                        fontSize: 18, color: AppColors.textMuted)),
+                const SizedBox(height: 6),
+                Text('Tap + to set your first savings goal',
+                    style: GoogleFonts.plusJakartaSans(
+                        fontSize: 13, color: AppColors.textDim)),
+              ],
+            ),
+          ),
+        )
+            : ListView(
+          padding: const EdgeInsets.fromLTRB(24, 14, 24, 100),
+          children: [
+            // Summary card — total saved vs total target
+            AnimatedOpacity(
+              opacity:  phase >= 1 ? 1 : 0,
+              duration: const Duration(milliseconds: 300),
+              child: _GoalSummaryCard(goals: goals, cur: cur),
+            ),
+            const SizedBox(height: 12),
+
+            // Individual goal cards
+            ...goals.asMap().entries.map((e) {
+              final i = e.key;
+              final g = e.value;
+              return AnimatedOpacity(
+                opacity:  phase >= 2 ? 1 : 0,
+                duration: Duration(milliseconds: 300 + i * 60),
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _GoalCard(goal: g, cur: cur),
+                ),
+              );
+            }),
+          ],
+        ),
+
+        // FAB — add goal
+        Positioned(
+          right: 20,
+          bottom: 24,
+          child: AnimatedOpacity(
+            opacity:  phase >= 1 ? 1 : 0,
+            duration: const Duration(milliseconds: 300),
+            child: GestureDetector(
+              onTap: () => showModalBottomSheet(
+                context:          context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (_) => const AddGoalSheet(),
+              ),
+              child: Container(
+                width: 52, height: 52,
+                decoration: BoxDecoration(
+                  color:        AppColors.accent,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color:       AppColors.accent.withOpacity(0.35),
+                      blurRadius:  12,
+                      offset:      const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.add_rounded,
+                    color: Colors.white, size: 26),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Goal Summary Card ─────────────────────────────────────────────────────────
+class _GoalSummaryCard extends StatelessWidget {
+  final List<Goal> goals;
+  final CurrencyInfo cur;
+  const _GoalSummaryCard({required this.goals, required this.cur});
+
+  @override
+  Widget build(BuildContext context) {
+    final totalTarget = goals.fold(0.0, (s, g) => s + g.targetAmount);
+    final totalSaved  = goals.fold(0.0, (s, g) => s + g.savedAmount);
+    final pct = totalTarget > 0
+        ? (totalSaved / totalTarget).clamp(0.0, 1.0)
+        : 0.0;
+    final done = goals.where((g) => g.savedAmount >= g.targetAmount).length;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color:        AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border:       Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text('⭐', style: TextStyle(fontSize: 14)),
+              const SizedBox(width: 8),
+              Text('Savings Goals',
+                  style: GoogleFonts.dmSerifDisplay(
+                      fontSize: 14, color: AppColors.textPrimary)),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color:        AppColors.accentDim,
+                  borderRadius: BorderRadius.circular(8),
+                  border:       Border.all(color: AppColors.accentMuted),
+                ),
+                child: Text(
+                  '$done / ${goals.length} done',
+                  style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.accent),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(cur.format(totalSaved),
+                  style: GoogleFonts.dmMono(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary)),
+              Text('of ${cur.format(totalTarget)}',
+                  style: GoogleFonts.plusJakartaSans(
+                      fontSize: 12, color: AppColors.textMuted)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value:            pct,
+              minHeight:        6,
+              backgroundColor:  AppColors.border,
+              valueColor: AlwaysStoppedAnimation(AppColors.accent),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text('${(pct * 100).toStringAsFixed(1)}% of total target saved',
+              style: GoogleFonts.plusJakartaSans(
+                  fontSize: 11, color: AppColors.textDim)),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Individual Goal Card ──────────────────────────────────────────────────────
+class _GoalCard extends ConsumerWidget {
+  final Goal       goal;
+  final CurrencyInfo cur;
+  const _GoalCard({required this.goal, required this.cur});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pct      = goal.targetAmount > 0
+        ? (goal.savedAmount / goal.targetAmount).clamp(0.0, 1.0)
+        : 0.0;
+    final isDone   = goal.savedAmount >= goal.targetAmount;
+    final remaining = (goal.targetAmount - goal.savedAmount).clamp(0.0, double.infinity);
+
+    Color barColor = isDone ? AppColors.incomeGreen : AppColors.accent;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color:        AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border:       Border.all(
+          color: isDone ? AppColors.incomeGreen.withOpacity(0.4) : AppColors.border,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Title row
+          Row(
+            children: [
+              Text(goal.icon, style: const TextStyle(fontSize: 22)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(goal.name,
+                        style: GoogleFonts.plusJakartaSans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary)),
+                    if (goal.targetDate != null)
+                      Text(
+                        'By ${DateFormat('dd MMM yyyy').format(goal.targetDate!)}',
+                        style: GoogleFonts.plusJakartaSans(
+                            fontSize: 11, color: AppColors.textDim),
+                      ),
+                  ],
+                ),
+              ),
+              // Action buttons
+              Row(
+                children: [
+                  // Top-up button
+                  if (!isDone)
+                    GestureDetector(
+                      onTap: () => showModalBottomSheet(
+                        context:            context,
+                        isScrollControlled: true,
+                        backgroundColor:    Colors.transparent,
+                        builder: (_) => TopUpGoalSheet(goal: goal),
+                      ),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color:        AppColors.accentDim,
+                          borderRadius: BorderRadius.circular(8),
+                          border:       Border.all(
+                              color: AppColors.accentMuted),
+                        ),
+                        child: Text('+ Top up',
+                            style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.accent)),
+                      ),
+                    ),
+                  const SizedBox(width: 8),
+                  // Delete button
+                  GestureDetector(
+                    onTap: () async {
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          backgroundColor: AppColors.surface,
+                          title: Text('Delete goal?',
+                              style: GoogleFonts.dmSerifDisplay(
+                                  color: AppColors.textPrimary)),
+                          content: Text(
+                            'This will permanently remove "${goal.name}".',
+                            style: GoogleFonts.plusJakartaSans(
+                                color: AppColors.textSecondary,
+                                fontSize: 13),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () =>
+                                  Navigator.pop(ctx, false),
+                              child: Text('Cancel',
+                                  style: GoogleFonts.plusJakartaSans(
+                                      color: AppColors.textMuted)),
+                            ),
+                            TextButton(
+                              onPressed: () =>
+                                  Navigator.pop(ctx, true),
+                              child: Text('Delete',
+                                  style: GoogleFonts.plusJakartaSans(
+                                      color: AppColors.expenseRed,
+                                      fontWeight: FontWeight.w600)),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirmed == true && context.mounted) {
+                        await ref.read(goalRepoProvider).delete(goal.id);
+                      }
+                    },
+                    child: Icon(Icons.delete_outline_rounded,
+                        size: 18, color: AppColors.textDim),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Progress bar
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value:           pct,
+              minHeight:       6,
+              backgroundColor: AppColors.border,
+              valueColor:      AlwaysStoppedAnimation(barColor),
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Amounts row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                isDone
+                    ? '✅ Goal reached!'
+                    : '${cur.format(goal.savedAmount)} saved',
+                style: GoogleFonts.dmMono(
+                    fontSize: 12,
+                    color: isDone
+                        ? AppColors.incomeGreen
+                        : AppColors.textSecondary),
+              ),
+              Text(
+                isDone
+                    ? cur.format(goal.targetAmount)
+                    : '${cur.format(remaining)} to go',
+                style: GoogleFonts.plusJakartaSans(
+                    fontSize: 11,
+                    color: AppColors.textDim),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
 // ── Ring Painter ──────────────────────────────────────────────────────────────
 class _RingPainter extends CustomPainter {
   final int   pct;
