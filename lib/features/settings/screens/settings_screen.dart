@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/services/preferences_service.dart';
 import '../../../data/database/app_database.dart';
+import '../../reports/screens/report_screen.dart';
 import 'reminders_screen.dart';
 import 'package:drift/drift.dart' as drift;
 import 'accounts_screen.dart';
@@ -134,12 +135,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                           ],
                         ),
                         const SizedBox(height: 20),
-
                         _buildSection(
                           title: 'Data',
                           visible: _phase >= 3,
                           delay: 400,
                           items: [
+                            _SettingsItem(
+                              icon: '📄',
+                              label: 'Export Report',
+                              sub: 'Download monthly or yearly PDF summary',
+                              onTap: () => showReportSheet(context),
+                            ),
                             _SettingsItem(
                               icon: '🗑️',
                               label: 'Reset App Data',
