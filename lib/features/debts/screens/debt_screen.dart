@@ -649,6 +649,7 @@ class _DebtCard extends ConsumerWidget {
                   ),
 
                   // Amount
+                  const SizedBox(width: 8),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [

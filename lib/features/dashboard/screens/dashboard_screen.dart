@@ -725,6 +725,8 @@ class TxDetailSheet extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(tx['name'] as String,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.dmSerifDisplay(
                             fontSize: 18, color: AppColors.textPrimary)),
                     const SizedBox(height: 3),
@@ -978,6 +980,8 @@ class DetailCell extends StatelessWidget {
               )),
           const SizedBox(height: 3),
           Text(value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 13, fontWeight: FontWeight.w600,
                 color: AppColors.textPrimary,
