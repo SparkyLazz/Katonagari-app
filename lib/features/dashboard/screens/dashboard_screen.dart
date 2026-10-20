@@ -317,7 +317,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                           builder: (_, __) {
                             final val   = _balanceAnim.value;
                             final isNeg = val < 0;
-                            return Text(
+                            // Scale down big balances instead of wrapping
+                            return FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
                               '${isNeg ? "−" : ""}${cur.format(val.abs())}',
                               style: GoogleFonts.dmSerifDisplay(
                                 fontSize: 36,
@@ -326,6 +330,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                                     : AppColors.textPrimary,
                                 letterSpacing: -0.5,
                               ),
+                            ),
                             );
                           },
                         ),
@@ -334,20 +339,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
                         Row(
                           children: [
-                            _StatPill(
-                              icon:   Icons.arrow_upward_rounded,
-                              amount: totalIncome,
-                              color:  AppColors.incomeGreen,
-                              bg:     AppColors.incomeGreenDim,
-                              cur:    cur,
+                            Flexible(
+                              child: _StatPill(
+                                icon:   Icons.arrow_upward_rounded,
+                                amount: totalIncome,
+                                color:  AppColors.incomeGreen,
+                                bg:     AppColors.incomeGreenDim,
+                                cur:    cur,
+                              ),
                             ),
                             const SizedBox(width: 10),
-                            _StatPill(
-                              icon:   Icons.arrow_downward_rounded,
-                              amount: totalExpense,
-                              color:  AppColors.expenseRed,
-                              bg:     AppColors.expenseRedDim,
-                              cur:    cur,
+                            Flexible(
+                              child: _StatPill(
+                                icon:   Icons.arrow_downward_rounded,
+                                amount: totalExpense,
+                                color:  AppColors.expenseRed,
+                                bg:     AppColors.expenseRedDim,
+                                cur:    cur,
+                              ),
                             ),
                           ],
                         ),
@@ -561,12 +570,18 @@ class _StatPill extends StatelessWidget {
       decoration: BoxDecoration(
           color: bg, borderRadius: BorderRadius.circular(10)),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 12, color: color),
           const SizedBox(width: 6),
-          Text(
-            cur.format(amount),
-            style: GoogleFonts.dmMono(fontSize: 11, color: color),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                cur.format(amount),
+                style: GoogleFonts.dmMono(fontSize: 11, color: color),
+              ),
+            ),
           ),
         ],
       ),

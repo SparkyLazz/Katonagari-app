@@ -480,21 +480,26 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen>
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 4),
       child: Row(
         children: [
-          _SummaryPill(
-            icon:   Icons.arrow_upward_rounded,
-            amount: income,
-            color:  AppColors.incomeGreen,
-            bg:     AppColors.incomeGreenDim,
-            cur:    cur,
+          Flexible(
+            child: _SummaryPill(
+              icon:   Icons.arrow_upward_rounded,
+              amount: income,
+              color:  AppColors.incomeGreen,
+              bg:     AppColors.incomeGreenDim,
+              cur:    cur,
+            ),
           ),
           const SizedBox(width: 10),
-          _SummaryPill(
-            icon:   Icons.arrow_downward_rounded,
-            amount: expense,
-            color:  AppColors.expenseRed,
-            bg:     AppColors.expenseRedDim,
-            cur:    cur,
+          Flexible(
+            child: _SummaryPill(
+              icon:   Icons.arrow_downward_rounded,
+              amount: expense,
+              color:  AppColors.expenseRed,
+              bg:     AppColors.expenseRedDim,
+              cur:    cur,
+            ),
           ),
+          const SizedBox(width: 10),
           const Spacer(),
           Text('$count transactions',
               style: GoogleFonts.plusJakartaSans(
@@ -623,12 +628,18 @@ class _SummaryPill extends StatelessWidget {
       decoration: BoxDecoration(
           color: bg, borderRadius: BorderRadius.circular(8)),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 11, color: color),
           const SizedBox(width: 5),
-          // ← was _fmtRp(amount)
-          Text(cur.format(amount),
-              style: GoogleFonts.dmMono(fontSize: 11, color: color)),
+          // Shrink large amounts rather than overflow narrow screens
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(cur.format(amount),
+                  style: GoogleFonts.dmMono(fontSize: 11, color: color)),
+            ),
+          ),
         ],
       ),
     );
