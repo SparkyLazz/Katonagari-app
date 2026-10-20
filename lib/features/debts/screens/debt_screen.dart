@@ -570,6 +570,8 @@ class _DebtCard extends ConsumerWidget {
                       children: [
                         Text(
                           debt.personName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 14, fontWeight: FontWeight.w600,
                             color: AppColors.textPrimary,
@@ -628,7 +630,7 @@ class _DebtCard extends ConsumerWidget {
                               Text('No due date',
                                   style: GoogleFonts.plusJakartaSans(
                                       fontSize: 11,
-                                      color: AppColors.textGhost)),
+                                      color: AppColors.textDim)),
                           ],
                         ),
                         if (debt.note != null && debt.note!.isNotEmpty) ...[
