@@ -119,6 +119,25 @@ class _DotIndicator extends StatelessWidget {
   }
 }
 
+// Lets a page fill the screen (so Spacer works) but scroll on short screens
+// instead of overflowing.
+class _FillScroll extends StatelessWidget {
+  final Widget child;
+  const _FillScroll({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (_, constraints) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: IntrinsicHeight(child: child),
+        ),
+      ),
+    );
+  }
+}
+
 // ─────────────────────────────────────────
 // PAGE 1 — The Hook
 // ─────────────────────────────────────────
@@ -128,7 +147,8 @@ class _PageHook extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return _FillScroll(
+      child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -165,6 +185,7 @@ class _PageHook extends StatelessWidget {
 
           const SizedBox(height: 32),
         ],
+      ),
       ),
     );
   }
@@ -295,7 +316,8 @@ class _PageSell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return _FillScroll(
+      child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -403,6 +425,7 @@ class _PageSell extends StatelessWidget {
 
           const SizedBox(height: 32),
         ],
+      ),
       ),
     );
   }

@@ -47,7 +47,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     final currencyInfo = ref.watch(currencyProvider);
     final themeId      = ref.watch(themeProvider);
 
-    return Scaffold(
+    // Back button closes the categories overlay instead of leaving the app
+    return PopScope(
+      canPop: !_showCats,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _showCats) setState(() => _showCats = false);
+      },
+      child: Scaffold(
       backgroundColor: AppColors.bg,
       body: Stack(
         children: [
@@ -189,6 +195,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           if (_showCats)
             _CategorySheet(onClose: () => setState(() => _showCats = false)),
         ],
+      ),
       ),
     );
   }
@@ -1142,14 +1149,6 @@ class _ThemePickerSheet extends StatelessWidget {
             final bgColor    = colors[0];
             final sfColor    = colors[1];
             final acColor    = colors[2];
-            final isDark     = id.isDark;
-
-            final textOnBg   = isDark
-                ? const Color(0xFFE8E0D8)
-                : const Color(0xFF1A1612);
-            final subOnBg    = isDark
-                ? const Color(0xFF6A6058)
-                : const Color(0xFF8A7D6A);
 
             return GestureDetector(
               onTap: () => onSelected(id),
@@ -1233,13 +1232,17 @@ class _ThemePickerSheet extends StatelessWidget {
                         children: [
                           Row(
                             children: [
-                              Text(id.label,
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 13, fontWeight: FontWeight.w700,
-                                    color: isSelected
-                                        ? AppColors.accent
-                                        : AppColors.textPrimary,
-                                  )),
+                              Flexible(
+                                child: Text(id.label,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 13, fontWeight: FontWeight.w700,
+                                      color: isSelected
+                                          ? AppColors.accent
+                                          : AppColors.textPrimary,
+                                    )),
+                              ),
                               const SizedBox(width: 8),
                               Container(
                                 padding: const EdgeInsets.symmetric(
