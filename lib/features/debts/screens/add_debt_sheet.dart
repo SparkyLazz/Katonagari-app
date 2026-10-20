@@ -7,6 +7,7 @@ import 'package:drift/drift.dart' show Value;
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/providers.dart';
+import '../../../core/utils/currency_formatter.dart';
 import '../../../data/database/app_database.dart';
 
 class AddDebtSheet extends ConsumerStatefulWidget {
@@ -321,7 +322,7 @@ class _AddDebtSheetState extends ConsumerState<AddDebtSheet> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text('Rp ',
+                    Text('${ref.currency.symbol} ',
                         style: GoogleFonts.dmMono(
                             fontSize: 16, color: AppColors.textMuted)),
                     Text(
