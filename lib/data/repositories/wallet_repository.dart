@@ -23,26 +23,29 @@ class WalletRepository {
   Future<bool> update(WalletsCompanion entry) =>
       _db.update(_db.wallets).replace(entry);
 
+  Future<void> updateDetails(int id, {required String name, required String icon}) =>
+      (_db.update(_db.wallets)..where((w) => w.id.equals(id)))
+          .write(WalletsCompanion(name: Value(name), icon: Value(icon)));
+
   Future<int> delete(int id) =>
       (_db.delete(_db.wallets)..where((w) => w.id.equals(id))).go();
 
   /// Adds [delta] to the wallet's current balance.
   /// Pass a positive delta for INCOME, negative for EXPENSE.
   Future<void> adjustBalance(int walletId, double delta) async {
-    final wallet = await getById(walletId);  // ← async read
-    if (wallet == null) return;
-    await update(                             // ← async write
-      wallet.toCompanion(false).copyWith(
-        balance: Value(wallet.balance + delta),
-      ),
-    );
+    // Single atomic UPDATE so concurrent adjustments can't overwrite each other
+    await (_db.update(_db.wallets)..where((w) => w.id.equals(walletId)))
+        .write(WalletsCompanion.custom(
+      balance: _db.wallets.balance + Variable(delta),
+    ));
   }
 
   /// Returns how many transactions are linked to this wallet.
   Future<int> transactionCount(int walletId) async {
-    final rows = await (_db.select(_db.transactions)
-          ..where((t) => t.walletId.equals(walletId)))
-        .get();
-    return rows.length;
+    final count = _db.transactions.id.count();
+    final query = _db.selectOnly(_db.transactions)
+      ..addColumns([count])
+      ..where(_db.transactions.walletId.equals(walletId));
+    return (await query.getSingle()).read(count) ?? 0;
   }
 }

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../../../core/services/preferences_service.dart';
 import '../../../core/utils/currency_formatter.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -108,17 +107,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           (_, next) => _animateBalance(next.valueOrNull ?? 0.0),
     );
 
-    ref.listen<AppThemeId>(
-      themeProvider,
-          (_, __) {
-        // Theme changed — re-drive the animation so the
-        // balance card doesn't show 0 after a rebuild.
-        final current = ref.read(totalBalanceProvider).valueOrNull ?? 0.0;
-        _lastBalance = 0; // reset so _animateBalance doesn't skip
-        _animateBalance(current);
-      },
-    );
-
     final transactions = txAsync.valueOrNull ?? <TransactionWithCategory>[];
     final totals       = totalsAsync.valueOrNull ?? {'income': 0.0, 'expense': 0.0};
     final totalIncome  = totals['income']  ?? 0.0;
@@ -126,25 +114,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     final balance      = balanceAsync.valueOrNull ?? 0.0;
     if (_lastBalance != balance && !_ctrl.isAnimating) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _animateBalance(balance);
+        if (mounted) _animateBalance(balance);
       });
     }
-    ref.listen<AsyncValue<double>>(
-      totalBalanceProvider,
-          (_, next) => _animateBalance(next.valueOrNull ?? 0.0),
-    );
     final isLoading    = txAsync.isLoading || totalsAsync.isLoading || balanceAsync.isLoading;
 
-    final today = DateTime.now();
-    final todaySpent = transactions
-        .where((t) =>
-    t.transaction.type == 'EXPENSE' &&
-        t.transaction.date.year  == today.year &&
-        t.transaction.date.month == today.month &&
-        t.transaction.date.day   == today.day)
-        .fold(0.0, (s, t) => s + t.transaction.amount);
-
-
+    // Independent of the selected month, so browsing history doesn't hide it
+    final todaySpent = ref.watch(todaySpentProvider).valueOrNull ?? 0.0;
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -184,10 +160,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Column(
+              Expanded(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(dateStr,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 12, fontWeight: FontWeight.w500,
                         color: AppColors.textMuted,
@@ -198,21 +177,26 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                       Text('Today  ',
                           style: GoogleFonts.dmSerifDisplay(
                               fontSize: 14, color: AppColors.textSecondary)),
-                      Text(
+                      Flexible(
+                      child: Text(
                         todaySpent > 0
                             ? '−${cur.format(todaySpent)}'
                             : 'No spending yet',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.dmMono(
                             fontSize: 15,
                             color: todaySpent > 0
                                 ? AppColors.expenseRed
                                 : AppColors.textDim),
                       ),
+                      ),
                     ],
                   ),
                 ],
               ),
-              const Spacer(),
+              ),
+              const SizedBox(width: 12),
               GestureDetector(
                 onTap: () => showMonthPicker(context),
                 child: AnimatedContainer(
@@ -333,7 +317,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                           builder: (_, __) {
                             final val   = _balanceAnim.value;
                             final isNeg = val < 0;
-                            return Text(
+                            // Scale down big balances instead of wrapping
+                            return FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
                               '${isNeg ? "−" : ""}${cur.format(val.abs())}',
                               style: GoogleFonts.dmSerifDisplay(
                                 fontSize: 36,
@@ -342,6 +330,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                                     : AppColors.textPrimary,
                                 letterSpacing: -0.5,
                               ),
+                            ),
                             );
                           },
                         ),
@@ -350,20 +339,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
                         Row(
                           children: [
-                            _StatPill(
-                              icon:   Icons.arrow_upward_rounded,
-                              amount: totalIncome,
-                              color:  AppColors.incomeGreen,
-                              bg:     AppColors.incomeGreenDim,
-                              cur:    cur,
+                            Flexible(
+                              child: _StatPill(
+                                icon:   Icons.arrow_upward_rounded,
+                                amount: totalIncome,
+                                color:  AppColors.incomeGreen,
+                                bg:     AppColors.incomeGreenDim,
+                                cur:    cur,
+                              ),
                             ),
                             const SizedBox(width: 10),
-                            _StatPill(
-                              icon:   Icons.arrow_downward_rounded,
-                              amount: totalExpense,
-                              color:  AppColors.expenseRed,
-                              bg:     AppColors.expenseRedDim,
-                              cur:    cur,
+                            Flexible(
+                              child: _StatPill(
+                                icon:   Icons.arrow_downward_rounded,
+                                amount: totalExpense,
+                                color:  AppColors.expenseRed,
+                                bg:     AppColors.expenseRedDim,
+                                cur:    cur,
+                              ),
                             ),
                           ],
                         ),
@@ -398,11 +391,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 Text('Budgets',
                     style: GoogleFonts.dmSerifDisplay(
                         fontSize: 17, color: AppColors.textPrimary)),
-                Text('See all →',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 12, fontWeight: FontWeight.w500,
-                      color: AppColors.accent,
-                    )),
+                _SeeAll(onTap: () =>
+                    ref.read(mainTabProvider.notifier).state = 2),
               ],
             ),
             const SizedBox(height: 14),
@@ -473,11 +463,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 Text('Recent',
                     style: GoogleFonts.dmSerifDisplay(
                         fontSize: 17, color: AppColors.textPrimary)),
-                Text('See all →',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 12, fontWeight: FontWeight.w500,
-                      color: AppColors.accent,
-                    )),
+                _SeeAll(onTap: () =>
+                    ref.read(mainTabProvider.notifier).state = 1),
               ],
             ),
             const SizedBox(height: 10),
@@ -541,9 +528,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                         'amount':   item.transaction.type == 'INCOME'
                             ? item.transaction.amount
                             : -item.transaction.amount,
-                        'date':     item.transaction.date
-                            .toIso8601String()
-                            .split('T')[0],
+                        'date':     item.transaction.date.toIso8601String(),
                         'time':     DateFormat('HH:mm')
                             .format(item.transaction.date),
                         'note':     item.transaction.note ?? '',
@@ -585,12 +570,18 @@ class _StatPill extends StatelessWidget {
       decoration: BoxDecoration(
           color: bg, borderRadius: BorderRadius.circular(10)),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 12, color: color),
           const SizedBox(width: 6),
-          Text(
-            cur.format(amount),
-            style: GoogleFonts.dmMono(fontSize: 11, color: color),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                cur.format(amount),
+                style: GoogleFonts.dmMono(fontSize: 11, color: color),
+              ),
+            ),
           ),
         ],
       ),
@@ -749,6 +740,8 @@ class TxDetailSheet extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(tx['name'] as String,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.dmSerifDisplay(
                             fontSize: 18, color: AppColors.textPrimary)),
                     const SizedBox(height: 3),
@@ -822,9 +815,11 @@ class TxDetailSheet extends ConsumerWidget {
               Expanded(
                 child: GestureDetector(
                   onTap: () {
-                    Navigator.pop(context);
+                    // Grab the navigator before this sheet's context goes away
+                    final nav = Navigator.of(context);
+                    nav.pop();
                     showModalBottomSheet(
-                      context: context,
+                      context: nav.context,
                       isScrollControlled: true,
                       backgroundColor: Colors.transparent,
                       builder: (_) => AddTransactionSheet(existingTx: tx),
@@ -950,6 +945,30 @@ class TxDetailSheet extends ConsumerWidget {
 }
 
 // ─────────────────────────────────────────────────────────
+//  "See all" link
+// ─────────────────────────────────────────────────────────
+class _SeeAll extends StatelessWidget {
+  final VoidCallback onTap;
+  const _SeeAll({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Text('See all →',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 12, fontWeight: FontWeight.w500,
+              color: AppColors.accent,
+            )),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────
 //  Detail Cell
 // ─────────────────────────────────────────────────────────
 class DetailCell extends StatelessWidget {
@@ -976,6 +995,8 @@ class DetailCell extends StatelessWidget {
               )),
           const SizedBox(height: 3),
           Text(value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 13, fontWeight: FontWeight.w600,
                 color: AppColors.textPrimary,
@@ -1064,18 +1085,25 @@ class _RealBudgetCardState extends State<_RealBudgetCard>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Text(b.category.icon,
-                      style: const TextStyle(fontSize: 15)),
-                  const SizedBox(width: 8),
-                  Text(b.category.name,
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 13, fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                      )),
-                ],
+              Expanded(
+                child: Row(
+                  children: [
+                    Text(b.category.icon,
+                        style: const TextStyle(fontSize: 15)),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(b.category.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 13, fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          )),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Text('$pct%',
                   style: GoogleFonts.dmMono(
                     fontSize: 11,

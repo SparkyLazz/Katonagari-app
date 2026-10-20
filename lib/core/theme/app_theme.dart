@@ -68,6 +68,24 @@ class AppTheme {
     );
   }
 
+  /// Theme for date/time pickers that follows the active (light or dark) scheme.
+  static ThemeData picker(BuildContext ctx) {
+    final base = Theme.of(ctx);
+    return base.copyWith(
+      colorScheme: base.colorScheme.copyWith(
+        primary:          AppColors.accent,
+        onPrimary:        AppColors.bg,
+        secondary:        AppColors.accent,
+        onSecondary:      AppColors.bg,
+        tertiary:         AppColors.accent,
+        onTertiary:       AppColors.bg,
+        surface:          AppColors.surfaceEl,
+        onSurface:        AppColors.textPrimary,
+        surfaceContainer: AppColors.surface,
+      ),
+    );
+  }
+
   // Keep a convenience getter for the default dark theme (used by splash etc.)
   static ThemeData get dark => buildFrom(AppThemeSchemes.obsidianGold);
 }

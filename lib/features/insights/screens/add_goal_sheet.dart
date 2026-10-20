@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:drift/drift.dart' as drift;
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/database/app_database.dart';
@@ -46,7 +47,9 @@ class _AddGoalSheetState extends ConsumerState<AddGoalSheet> {
           _amount = _amount.substring(0, _amount.length - 1);
         }
       } else if (key == '000') {
-        if (_amount.isNotEmpty) _amount += '000';
+        if (_amount.isNotEmpty && _amount.length <= 9) _amount += '000';
+      } else if (key == '0' && _amount.isEmpty) {
+        // Ignore leading zeros
       } else {
         if (_amount.length < 12) _amount += key;
       }
@@ -61,13 +64,7 @@ class _AddGoalSheetState extends ConsumerState<AddGoalSheet> {
       firstDate:   now,
       lastDate:    DateTime(now.year + 10),
       builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: ColorScheme.dark(
-            primary:   AppColors.accent,
-            surface:   AppColors.surface,
-            onSurface: AppColors.textPrimary,
-          ),
-        ),
+        data: AppTheme.picker(ctx),
         child: child!,
       ),
     );
@@ -76,24 +73,27 @@ class _AddGoalSheetState extends ConsumerState<AddGoalSheet> {
 
   Future<void> _save() async {
     final name = _nameController.text.trim();
-    if (name.isEmpty || _amount.isEmpty || _amount == '0') return;
+    if (_saving || name.isEmpty || (int.tryParse(_amount) ?? 0) <= 0) return;
     setState(() => _saving = true);
 
-    await ref.read(goalRepoProvider).add(GoalsCompanion.insert(
-      name:         name,
-      icon:         drift.Value(_icon),
-      targetAmount: double.parse(_amount),
-      savedAmount:  const drift.Value(0),
-      targetDate:   drift.Value(_targetDate),
-    ));
-
-    if (mounted) Navigator.pop(context);
+    try {
+      await ref.read(goalRepoProvider).add(GoalsCompanion.insert(
+        name:         name,
+        icon:         drift.Value(_icon),
+        targetAmount: double.parse(_amount),
+        savedAmount:  const drift.Value(0),
+        targetDate:   drift.Value(_targetDate),
+      ));
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      debugPrint('Save goal error: $e');
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   bool get _canSave =>
       _nameController.text.trim().isNotEmpty &&
-          _amount.isNotEmpty &&
-          _amount != '0';
+          (int.tryParse(_amount) ?? 0) > 0;
 
   @override
   void dispose() {
@@ -435,7 +435,9 @@ class _TopUpGoalSheetState extends ConsumerState<TopUpGoalSheet> {
           _amount = _amount.substring(0, _amount.length - 1);
         }
       } else if (key == '000') {
-        if (_amount.isNotEmpty) _amount += '000';
+        if (_amount.isNotEmpty && _amount.length <= 9) _amount += '000';
+      } else if (key == '0' && _amount.isEmpty) {
+        // Ignore leading zeros
       } else {
         if (_amount.length < 12) _amount += key;
       }
@@ -443,13 +445,18 @@ class _TopUpGoalSheetState extends ConsumerState<TopUpGoalSheet> {
   }
 
   Future<void> _save() async {
-    if (_amount.isEmpty || _amount == '0') return;
+    if (_saving || (int.tryParse(_amount) ?? 0) <= 0) return;
     setState(() => _saving = true);
-    await ref.read(goalRepoProvider).topUp(
-      widget.goal,
-      double.parse(_amount),
-    );
-    if (mounted) Navigator.pop(context);
+    try {
+      await ref.read(goalRepoProvider).topUp(
+        widget.goal,
+        double.parse(_amount),
+      );
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      debugPrint('Top-up error: $e');
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -458,7 +465,7 @@ class _TopUpGoalSheetState extends ConsumerState<TopUpGoalSheet> {
     final goal     = widget.goal;
     final remaining = (goal.targetAmount - goal.savedAmount)
         .clamp(0.0, double.infinity);
-    final canSave  = _amount.isNotEmpty && _amount != '0';
+    final canSave  = (int.tryParse(_amount) ?? 0) > 0;
 
     return Container(
       decoration: BoxDecoration(

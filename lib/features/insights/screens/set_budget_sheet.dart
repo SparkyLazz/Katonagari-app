@@ -49,7 +49,9 @@ class _SetBudgetSheetState extends ConsumerState<SetBudgetSheet> {
           _amount = _amount.substring(0, _amount.length - 1);
         }
       } else if (key == '000') {
-        if (_amount.isNotEmpty) _amount += '000';
+        if (_amount.isNotEmpty && _amount != '0' && _amount.length <= 9) {
+          _amount += '000';
+        }
       } else {
         if (_amount == '0') {
           _amount = key;
@@ -61,24 +63,29 @@ class _SetBudgetSheetState extends ConsumerState<SetBudgetSheet> {
   }
 
   Future<void> _save() async {
-    if (_amount.isEmpty || _amount == '0') return;
+    if (_saving || (int.tryParse(_amount) ?? 0) <= 0) return;
     setState(() => _saving = true);
 
-    final now  = DateTime.now();
-    final repo = ref.read(budgetRepoProvider);
-    await repo.upsert(
-      categoryId: widget.category.id,
-      amount:     double.parse(_amount),
-      month:      now.month,
-      year:       now.year,
-    );
-
-    if (mounted) Navigator.pop(context);
+    // Budgets belong to the month being viewed, not always the current one
+    final month = ref.read(selectedMonthProvider);
+    final repo  = ref.read(budgetRepoProvider);
+    try {
+      await repo.upsert(
+        categoryId: widget.category.id,
+        amount:     double.parse(_amount),
+        month:      month.month,
+        year:       month.year,
+      );
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      debugPrint('Save budget error: $e');
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final hasAmount = _amount.isNotEmpty && _amount != '0';
+    final hasAmount = (int.tryParse(_amount) ?? 0) > 0;
     final cur       = ref.currency; // ← live currency symbol
 
     return Container(

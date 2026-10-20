@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/services/preferences_service.dart';
@@ -83,19 +84,7 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen> {
         context: context,
         initialTime: initial,
         builder: (ctx, child) => Theme(
-          data: Theme.of(ctx).copyWith(
-            colorScheme: ColorScheme.dark(
-              primary:          AppColors.accent,
-              onPrimary:        AppColors.bg,
-              secondary:        AppColors.accent,
-              onSecondary:      AppColors.bg,
-              tertiary:         AppColors.accent,
-              onTertiary:       AppColors.bg,
-              surface:          AppColors.surfaceEl,
-              onSurface:        AppColors.textPrimary,
-              surfaceContainer: AppColors.surface,
-            ),
-          ),
+          data: AppTheme.picker(ctx),
           child: child!,
         ),
       );
@@ -126,7 +115,7 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen> {
     final t = await _pickTime(_dailyTime);
     if (t == null) return;
     setState(() => _dailyTime = t);
-    if (_dailyEnabled) await _svc.scheduleDailyReminder(t);
+    if (_dailyEnabled) await _reschedule(() => _svc.scheduleDailyReminder(t));
   }
 
   // ── Weekly ────────────────────────────────────────────
@@ -155,24 +144,43 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen> {
     final t = await _pickTime(_weeklyTime);
     if (t == null) return;
     setState(() => _weeklyTime = t);
-    if (_weeklyEnabled) await _svc.scheduleWeeklySummary(_weeklyDay, t);
+    if (_weeklyEnabled) {
+      await _reschedule(() => _svc.scheduleWeeklySummary(_weeklyDay, t));
+    }
   }
 
   Future<void> _changeWeeklyDay(int day) async {
     setState(() => _weeklyDay = day);
-    if (_weeklyEnabled) await _svc.scheduleWeeklySummary(day, _weeklyTime);
+    if (_weeklyEnabled) {
+      await _reschedule(() => _svc.scheduleWeeklySummary(day, _weeklyTime));
+    }
+  }
+
+  Future<void> _reschedule(Future<void> Function() schedule) async {
+    try {
+      await schedule();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Could not schedule reminder. Please try again.'),
+        ));
+      }
+    }
   }
 
   // ── Bills ─────────────────────────────────────────────
   Future<void> _deleteBill(String id) async {
     await _svc.deleteBill(id);
+    if (!mounted) return;
     setState(() => _bills.removeWhere((b) => b.id == id));
     HapticFeedback.lightImpact();
   }
 
   Future<void> _toggleBill(BillReminder bill, bool val) async {
     final updated = bill.copyWith(isActive: val);
+    if (val && !await _svc.requestPermissions()) return;
     await _svc.updateBill(updated);
+    if (!mounted) return;
     setState(() {
       final i = _bills.indexWhere((b) => b.id == bill.id);
       if (i != -1) _bills[i] = updated;
@@ -191,13 +199,15 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen> {
         onSave: (bill) async {
           if (existing == null) {
             await _svc.addBill(bill);
-            setState(() => _bills.add(bill));
+            if (mounted) setState(() => _bills.add(bill));
           } else {
             await _svc.updateBill(bill);
-            setState(() {
-              final i = _bills.indexWhere((b) => b.id == bill.id);
-              if (i != -1) _bills[i] = bill;
-            });
+            if (mounted) {
+              setState(() {
+                final i = _bills.indexWhere((b) => b.id == bill.id);
+                if (i != -1) _bills[i] = bill;
+              });
+            }
           }
         },
       ),
@@ -789,7 +799,7 @@ class _BillSheetState extends State<_BillSheet> {
 
   bool get _canSave =>
       _nameCtrl.text.trim().isNotEmpty &&
-      _amountCtrl.text.trim().isNotEmpty;
+      (double.tryParse(_amountCtrl.text.trim()) ?? 0) > 0;
 
   void _save() {
     if (!_canSave || _saving) return;
@@ -802,6 +812,8 @@ class _BillSheetState extends State<_BillSheet> {
       amount:     double.tryParse(_amountCtrl.text) ?? 0,
       dueDay:     _dueDay,
       daysBefore: _daysBefore,
+      // Editing must not silently re-activate a paused reminder
+      isActive:   widget.existing?.isActive ?? true,
     );
     widget.onSave(bill);
     Navigator.of(context).pop();
@@ -1082,6 +1094,12 @@ class _BillSheetState extends State<_BillSheet> {
         keyboardType: numeric
             ? TextInputType.number
             : TextInputType.text,
+        inputFormatters: numeric
+            ? [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(12),
+              ]
+            : null,
         style: GoogleFonts.plusJakartaSans(
             fontSize: 14, color: AppColors.textPrimary),
         decoration: InputDecoration(

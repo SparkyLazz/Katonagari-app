@@ -5,6 +5,7 @@ import 'package:drift/drift.dart' as drift;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/services/preferences_service.dart';
@@ -43,8 +44,9 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
   String   _mode         = 'quick';
   String   _note         = '';
   bool     _isOneTime    = false;
-  String   _recurring    = 'none';
+  final String _recurring = 'none';
   bool     _showMore     = false;
+  bool     _saving       = false;
   int?     _walletId;
   DateTime _selectedDate = DateTime.now();
 
@@ -53,6 +55,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
   final _scrollController = ScrollController();
   final _noteFocusNode    = FocusNode();
   final _noteFieldKey     = GlobalKey();
+  final _noteCtrl         = TextEditingController();
 
   bool get _isIncome => _type == 'income';
 
@@ -74,6 +77,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
       // Show the "more" panel if there is a note or it's one-time so user can see it
       if (_note.isNotEmpty || _isOneTime) _showMore = true;
     }
+    _noteCtrl.text = _note;
 
     _noteFocusNode.addListener(() {
       if (_noteFocusNode.hasFocus) {
@@ -81,7 +85,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
         // scroll exactly so the note field is visible above it.
         Future.delayed(const Duration(milliseconds: 350), () {
           final ctx = _noteFieldKey.currentContext;
-          if (ctx != null) {
+          if (mounted && ctx != null && ctx.mounted) {
             Scrollable.ensureVisible(
               ctx,
               duration: const Duration(milliseconds: 300),
@@ -102,13 +106,13 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
     if (ex != null && _catId == null) {
       final catId = ex['catId'];
       if (catId != null) {
-        setState(() => _catId = catId.toString());
+        _catId = catId.toString();
       } else {
         // Fallback: match by name
         final catName = ex['cat'] as String?;
         if (catName != null) {
           final match = _cats.where((c) => c.name == catName).firstOrNull;
-          if (match != null) setState(() => _catId = match.id.toString());
+          if (match != null) _catId = match.id.toString();
         }
       }
     }
@@ -118,6 +122,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
   void dispose() {
     _scrollController.dispose();
     _noteFocusNode.dispose();
+    _noteCtrl.dispose();
     super.dispose();
   }
 
@@ -135,7 +140,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
     }
   }
 
-  bool get _hasAmount => _amount.isNotEmpty && _amount != '0';
+  bool get _hasAmount => (int.tryParse(_amount) ?? 0) > 0;
   bool get _canSave   => _hasAmount && _catId != null;
 
   void _maybeAutoSelect(List<Wallet> wallets) {
@@ -150,21 +155,25 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
     setState(() {
       if (_amount.length >= 12) return;
       if (_amount.isEmpty && k == '000') return;
-      if (_amount == '0' && k == '0') return;
-      _amount = _amount.isEmpty ? k : _amount + k;
+      if (_amount == '0' && (k == '0' || k == '000')) return;
+      // Replace a lone leading zero instead of producing "05"
+      final next = (_amount.isEmpty || _amount == '0') ? k : _amount + k;
+      if (next.length <= 12) _amount = next;
     });
   }
 
   void _onDelete() {
     setState(() {
-      if (_amount.isNotEmpty)
+      if (_amount.isNotEmpty) {
         _amount = _amount.substring(0, _amount.length - 1);
+      }
     });
   }
 
   Future<void> _onSave() async {
-    if (!_canSave) return;
+    if (!_canSave || _saving) return;
     HapticFeedback.lightImpact();
+    _saving = true;
 
     try {
       int? effectiveWalletId = _walletId;
@@ -172,10 +181,14 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
         final wallet = await ref.read(walletRepoProvider).getDefault();
         effectiveWalletId = wallet?.id;
       }
-      if (effectiveWalletId == null || _catObj == null) return;
+      if (effectiveWalletId == null || _catObj == null) {
+        _saving = false;
+        return;
+      }
 
       final txRepo  = ref.read(transactionRepoProvider);
       final newAmt  = double.parse(_amount);
+      int? newId;
 
       if (_isEditMode) {
         // ── UPDATE existing transaction ──────────────────────────────────────
@@ -208,7 +221,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
         ));
       } else {
         // ── INSERT new transaction ────────────────────────────────────────────
-        await txRepo.add(TransactionsCompanion.insert(
+        newId = await txRepo.add(TransactionsCompanion.insert(
           walletId:    effectiveWalletId,
           categoryId:  _catObj!.id,
           type:        _isIncome ? 'INCOME' : 'EXPENSE',
@@ -225,6 +238,9 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
 
       if (mounted) {
         Navigator.of(context).pop({
+          'id':        newId,
+          'walletId':  effectiveWalletId,
+          'isEdit':    _isEditMode,
           'type':      _type,
           'amount':    newAmt,
           'catId':     _catObj!.id,
@@ -237,6 +253,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
       }
     } catch (e) {
       debugPrint('Save error: $e');
+      _saving = false;
     }
   }
 
@@ -406,7 +423,8 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
   Widget _buildFullMode(List<Wallet> wallets, CurrencyInfo cur) {
     return SingleChildScrollView(
       controller: _scrollController,
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+      padding: EdgeInsets.fromLTRB(
+          20, 8, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -641,21 +659,24 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
             final picked = await showDatePicker(
               context: context,
               initialDate: _selectedDate,
-              firstDate: DateTime(2020),
-              lastDate: DateTime.now(),
+              firstDate: _selectedDate.isBefore(DateTime(2020))
+                  ? _selectedDate
+                  : DateTime(2020),
+              lastDate: _selectedDate.isAfter(DateTime.now())
+                  ? _selectedDate
+                  : DateTime.now(),
               builder: (ctx, child) => Theme(
-                data: Theme.of(ctx).copyWith(
-                  colorScheme: ColorScheme.dark(
-                    primary:   AppColors.accent,
-                    onPrimary: AppColors.bg,
-                    surface:   AppColors.surfaceEl,
-                    onSurface: AppColors.textPrimary,
-                  ),
-                ),
+                data: AppTheme.picker(ctx),
                 child: child!,
               ),
             );
-            if (picked != null) setState(() => _selectedDate = picked);
+            if (picked != null) {
+              // Keep the original time-of-day so same-day ordering stays sensible
+              setState(() => _selectedDate = DateTime(
+                    picked.year, picked.month, picked.day,
+                    _selectedDate.hour, _selectedDate.minute, _selectedDate.second,
+                  ));
+            }
           },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -708,8 +729,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
         TextField(
           key:       _noteFieldKey,
           focusNode:  _noteFocusNode,
-          controller: TextEditingController(text: _note)
-            ..selection = TextSelection.collapsed(offset: _note.length),
+          controller: _noteCtrl,
           onChanged:  (v) => _note = v,
           maxLength:  100,
           style: GoogleFonts.plusJakartaSans(

@@ -124,17 +124,19 @@ class PdfReportService {
   }
 
   // ── Page 2: Full transaction list ─────────────────────────────────────────
-  static pw.Page _transactionsPage(ReportData data) {
+  static pw.MultiPage _transactionsPage(ReportData data) {
     final cur    = data.currency;
     final sorted = [...data.transactions]
       ..sort((a, b) => b.transaction.date.compareTo(a.transaction.date));
 
-    return pw.Page(
+    // MultiPage so long transaction lists flow onto extra pages instead of
+    // overflowing a single page (which made report generation fail).
+    return pw.MultiPage(
       pageFormat: PdfPageFormat.a4,
       margin: const pw.EdgeInsets.all(32),
-      build: (_) => pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      footer: (_) => _footer(),
+      build: (_) => [
           _miniHeader(data.periodLabel),
           pw.SizedBox(height: 16),
           _sectionTitle('All Transactions'),
@@ -168,10 +170,7 @@ class PdfReportService {
               }),
             ],
           ),
-          pw.Spacer(),
-          _footer(),
-        ],
-      ),
+      ],
     );
   }
 
@@ -404,6 +403,9 @@ extension _PdfCurrency on CurrencyInfo {
   /// Plain number with currency symbol — safe for PDF fonts (no emoji).
   String pdfFormat(double amount) {
     final fmt = NumberFormat('#,##0', 'en_US');
-    return '$symbol ${fmt.format(amount.abs())}';
+    // The built-in PDF font only covers Latin-1 (+ €); fall back to the ISO
+    // code for symbols it can't draw (e.g. ﷼).
+    final printable = symbol.runes.every((r) => r <= 0xFF || r == 0x20AC);
+    return '${printable ? symbol : code} ${fmt.format(amount.abs())}';
   }
 }

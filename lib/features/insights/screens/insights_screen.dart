@@ -232,6 +232,14 @@ class _SpendingView extends ConsumerWidget {
     final selectedMonth = ref.watch(selectedMonthProvider);
 
     if (data == null) {
+      // Don't spin forever if the stream failed
+      if (dataAsync.hasError) {
+        return Center(
+          child: Text('Could not load insights',
+              style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13, color: AppColors.textMuted)),
+        );
+      }
       return Center(
         child: CircularProgressIndicator(color: AppColors.accent),
       );
@@ -929,7 +937,6 @@ class _BiggestMoversTable extends StatelessWidget {
     if (movers.isEmpty) return const SizedBox.shrink();
 
     final prevMonth = DateTime(selectedMonth.year, selectedMonth.month - 1);
-    final thisFmt   = DateFormat('MMM').format(selectedMonth);
     final prevFmt   = DateFormat('MMM').format(prevMonth);
 
     return AnimatedOpacity(
@@ -1270,33 +1277,26 @@ class _SpendingChartState extends State<_SpendingChart>
             ],
           ),
           const SizedBox(height: 10),
-          AnimatedBuilder(
+          LayoutBuilder(
+            builder: (_, constraints) {
+              // Bar index under the finger, measured against the chart's own
+              // width (not the padded card around it).
+              void hover(Offset local) {
+                if (daily.isEmpty || constraints.maxWidth <= 0) return;
+                final barWidth = constraints.maxWidth / daily.length;
+                final idx      = (local.dx / barWidth)
+                    .floor()
+                    .clamp(0, daily.length - 1);
+                if (idx != _hoveredIndex) setState(() => _hoveredIndex = idx);
+              }
+              return AnimatedBuilder(
             animation: _anim,
             builder: (_, __) {
               return GestureDetector(
-                onPanUpdate: (d) {
-                  if (daily.isEmpty) return;
-                  final box = context.findRenderObject() as RenderBox?;
-                  if (box == null) return;
-                  final localX   = d.localPosition.dx;
-                  final barWidth = box.size.width / daily.length;
-                  final idx      = (localX / barWidth)
-                      .floor()
-                      .clamp(0, daily.length - 1);
-                  setState(() => _hoveredIndex = idx);
-                },
+                onPanUpdate: (d) => hover(d.localPosition),
                 onPanEnd:  (_) => setState(() => _hoveredIndex = null),
-                onTapDown: (d) {
-                  if (daily.isEmpty) return;
-                  final box = context.findRenderObject() as RenderBox?;
-                  if (box == null) return;
-                  final localX   = d.localPosition.dx;
-                  final barWidth = box.size.width / daily.length;
-                  final idx      = (localX / barWidth)
-                      .floor()
-                      .clamp(0, daily.length - 1);
-                  setState(() => _hoveredIndex = idx);
-                },
+                onPanCancel: () => setState(() => _hoveredIndex = null),
+                onTapDown: (d) => hover(d.localPosition),
                 onTapUp: (_) => setState(() => _hoveredIndex = null),
                 child: RepaintBoundary(
                   child: CustomPaint(
@@ -1310,6 +1310,8 @@ class _SpendingChartState extends State<_SpendingChart>
                     ),
                   ),
                 ),
+              );
+            },
               );
             },
           ),
@@ -1335,8 +1337,9 @@ class _ChartPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (daily.isEmpty) return;
-    final chartH = size.height - 20;
-    final barW   = (size.width / daily.length) - 2;
+    const labelH = 12.0; // space reserved at the bottom for day labels
+    final chartH = size.height - 20 - labelH;
+    final barW   = ((size.width / daily.length) - 2).clamp(1.0, double.infinity);
     final avgY   = 20 + chartH - (avgDaily / maxVal) * chartH;
 
     final gridPaint = Paint()
@@ -1401,7 +1404,10 @@ class _ChartPainter extends CustomPainter {
   @override
   bool shouldRepaint(_ChartPainter old) =>
       old.animValue    != animValue ||
-          old.hoveredIndex != hoveredIndex;
+          old.hoveredIndex != hoveredIndex ||
+          old.maxVal       != maxVal ||
+          old.avgDaily     != avgDaily ||
+          !identical(old.daily, daily);
 }
 
 // ── BUDGETS VIEW ──────────────────────────────────────────────────────────────
@@ -1550,7 +1556,11 @@ class _BudgetsViewState extends ConsumerState<_BudgetsView> {
 
         if (_selectedBudget != null)
           _BudgetDetailSheet(
-            budget:  _selectedBudget!,
+            // Use the live entry so spending updates while the sheet is open
+            budget:  budgets
+                    .where((b) => b.budget.id == _selectedBudget!.budget.id)
+                    .firstOrNull ??
+                _selectedBudget!,
             cur:     cur,
             onClose: () => setState(() => _selectedBudget = null),
             onEdit:  () {
@@ -1744,8 +1754,8 @@ class _GoalsView extends ConsumerWidget {
                     ),
                   ],
                 ),
-                child: const Icon(Icons.add_rounded,
-                    color: Colors.white, size: 26),
+                child: Icon(Icons.add_rounded,
+                    color: AppColors.bg, size: 26),
               ),
             ),
           ),
@@ -1878,6 +1888,8 @@ class _GoalCard extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(goal.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.plusJakartaSans(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
@@ -1959,8 +1971,13 @@ class _GoalCard extends ConsumerWidget {
                         await ref.read(goalRepoProvider).delete(goal.id);
                       }
                     },
-                    child: Icon(Icons.delete_outline_rounded,
-                        size: 18, color: AppColors.textDim),
+                    behavior: HitTestBehavior.opaque,
+                    child: Padding(
+                      // Bigger tap target than the bare 18px icon
+                      padding: const EdgeInsets.all(6),
+                      child: Icon(Icons.delete_outline_rounded,
+                          size: 18, color: AppColors.textDim),
+                    ),
                   ),
                 ],
               ),
@@ -2189,7 +2206,7 @@ class _BudgetDetailSheetState extends State<_BudgetDetailSheet> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      setState(() => _show = true);
+      if (mounted) setState(() => _show = true);
     });
   }
 

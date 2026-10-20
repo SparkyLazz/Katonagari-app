@@ -47,7 +47,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     final currencyInfo = ref.watch(currencyProvider);
     final themeId      = ref.watch(themeProvider);
 
-    return Scaffold(
+    // Back button closes the categories overlay instead of leaving the app
+    return PopScope(
+      canPop: !_showCats,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _showCats) setState(() => _showCats = false);
+      },
+      child: Scaffold(
       backgroundColor: AppColors.bg,
       body: Stack(
         children: [
@@ -173,7 +179,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                               style: GoogleFonts.dmSerifDisplay(
                                   fontSize: 13, color: AppColors.textGhost)),
                           const SizedBox(height: 2),
-                          Text('v1.3.0',
+                          Text('v1.5.0',
                               style: GoogleFonts.plusJakartaSans(
                                   fontSize: 10, color: AppColors.textGhost)),
                         ],
@@ -189,6 +195,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           if (_showCats)
             _CategorySheet(onClose: () => setState(() => _showCats = false)),
         ],
+      ),
       ),
     );
   }
@@ -408,7 +415,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                     fontSize: 20, color: AppColors.textPrimary)),
             const SizedBox(height: 8),
             Text(
-              'This will permanently delete all your transactions, budgets, and settings. This cannot be undone.',
+              'This will permanently delete all your transactions, budgets, goals, debts, accounts and categories. This cannot be undone.',
               textAlign: TextAlign.center,
               style: GoogleFonts.plusJakartaSans(
                   fontSize: 13, color: AppColors.textMuted, height: 1.5),
@@ -466,42 +473,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   }
 
   Future<void> _resetAppData() async {
-    final db = ref.read(databaseProvider);
-    await db.transaction(() async {
-      await db.delete(db.budgets).go();
-      await db.delete(db.transactions).go();
-      await db.delete(db.categories).go();
-      await db.delete(db.wallets).go();
-    });
-
-    await db.into(db.wallets).insert(
-      WalletsCompanion.insert(name: 'Cash', balance: const drift.Value(0)),
-    );
-
-    final expCats = [
-      ('Food','🍜','#E8A87C'), ('Transport','⛽','#7EC8E3'),
-      ('Bills','📱','#C4A778'), ('Groceries','🛒','#95D5B2'),
-      ('Housing','🏠','#B8A9C9'), ('Entertainment','🎮','#F28482'),
-      ('Health','💊','#84DCC6'), ('Shopping','🛍️','#FFB347'),
-      ('Education','📚','#87CEEB'), ('Other','📦','#A9A9A9'),
-    ];
-    for (final c in expCats) {
-      await db.into(db.categories).insert(CategoriesCompanion.insert(
-        name: c.$1, type: 'EXPENSE', icon: c.$2,
-        color: drift.Value(c.$3), isDefault: const drift.Value(true),
-      ));
-    }
-
-    final incCats = [
-      ('Salary','💼','#5A9E6F'), ('Freelance','💻','#5A9E6F'),
-      ('Business','🏪','#5A9E6F'), ('Other','💰','#5A9E6F'),
-    ];
-    for (final c in incCats) {
-      await db.into(db.categories).insert(CategoriesCompanion.insert(
-        name: c.$1, type: 'INCOME', icon: c.$2,
-        color: drift.Value(c.$3), isDefault: const drift.Value(true),
-      ));
-    }
+    await ref.read(databaseProvider).resetAllData();
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -671,7 +643,7 @@ class _CategorySheetState extends ConsumerState<_CategorySheet> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      setState(() => _show = true);
+      if (mounted) setState(() => _show = true);
     });
   }
 
@@ -1177,14 +1149,6 @@ class _ThemePickerSheet extends StatelessWidget {
             final bgColor    = colors[0];
             final sfColor    = colors[1];
             final acColor    = colors[2];
-            final isDark     = id.isDark;
-
-            final textOnBg   = isDark
-                ? const Color(0xFFE8E0D8)
-                : const Color(0xFF1A1612);
-            final subOnBg    = isDark
-                ? const Color(0xFF6A6058)
-                : const Color(0xFF8A7D6A);
 
             return GestureDetector(
               onTap: () => onSelected(id),
@@ -1268,13 +1232,17 @@ class _ThemePickerSheet extends StatelessWidget {
                         children: [
                           Row(
                             children: [
-                              Text(id.label,
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 13, fontWeight: FontWeight.w700,
-                                    color: isSelected
-                                        ? AppColors.accent
-                                        : AppColors.textPrimary,
-                                  )),
+                              Flexible(
+                                child: Text(id.label,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 13, fontWeight: FontWeight.w700,
+                                      color: isSelected
+                                          ? AppColors.accent
+                                          : AppColors.textPrimary,
+                                    )),
+                              ),
                               const SizedBox(width: 8),
                               Container(
                                 padding: const EdgeInsets.symmetric(

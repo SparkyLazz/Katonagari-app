@@ -230,4 +230,5 @@ class AppColors {
   static Color get incomeGreenDim => _current.incomeGreenDim;
   static Color get expenseRed     => _current.expenseRed;
   static Color get expenseRedDim  => _current.expenseRedDim;
+  static bool  get isDark         => _current.isDark;
 }

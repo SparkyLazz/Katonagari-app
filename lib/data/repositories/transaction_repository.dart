@@ -17,10 +17,11 @@ class TransactionRepository {
 
   // ── Get transactions by month ──
   Stream<List<Transaction>> watchByMonth(int month, int year) {
-    final start = DateTime(year, month, 1);
-    final end = DateTime(year, month + 1, 0, 23, 59, 59);
+    final start = DateTime(year, month);
+    final end = DateTime(year, month + 1);
     return (_db.select(_db.transactions)
-          ..where((t) => t.date.isBetweenValues(start, end))
+          ..where((t) =>
+              t.date.isBiggerOrEqualValue(start) & t.date.isSmallerThanValue(end))
           ..orderBy([
             (t) => OrderingTerm.desc(t.date),
             (t) => OrderingTerm.desc(t.createdAt),
@@ -55,11 +56,12 @@ Stream<List<TransactionWithCategory>> watchAllWithCategory() {
 
   // ── Get monthly totals ──
   Future<Map<String, double>> getMonthlyTotals(int month, int year) async {
-    final start = DateTime(year, month, 1);
-    final end = DateTime(year, month + 1, 0, 23, 59, 59);
+    final start = DateTime(year, month);
+    final end = DateTime(year, month + 1);
 
     final rows = await (_db.select(_db.transactions)
-          ..where((t) => t.date.isBetweenValues(start, end)))
+          ..where((t) =>
+              t.date.isBiggerOrEqualValue(start) & t.date.isSmallerThanValue(end)))
         .get();
 
     double income = 0;
