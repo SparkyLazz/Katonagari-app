@@ -6,6 +6,8 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import '../utils/currency_formatter.dart';
+import 'preferences_service.dart';
 
 
 // ─────────────────────────────────────────────────────────
@@ -365,15 +367,14 @@ class NotificationService {
     final notifyDate = _nextBillNotifyDate(bill);
     if (notifyDate == null) return;
 
-    final fmtAmount = 'Rp ${bill.amount.toInt().toString().replaceAllMapped(
-          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (m) => '${m[1]}.',
-        )}';
+    final cur = PreferencesService.currencyByCode(
+        await PreferencesService.instance.getCurrencyCode());
+    final fmtAmount = cur.format(bill.amount);
 
     await _plugin.zonedSchedule(
       _billId(index),
       '${bill.icon} ${bill.name} due in ${bill.daysBefore} day${bill.daysBefore == 1 ? '' : 's'}',
-      '$fmtAmount · Due on the ${_ordinal(bill.dueDay)} of this month.',
+      '$fmtAmount · Due on the ${_ordinal(bill.dueDay)}.',
       notifyDate,
       _details,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
@@ -384,18 +385,20 @@ class NotificationService {
   }
 
   tz.TZDateTime? _nextBillNotifyDate(BillReminder bill) {
-    final now        = tz.TZDateTime.now(tz.local);
-    final notifyDay  = bill.dueDay - bill.daysBefore;
+    final now = tz.TZDateTime.now(tz.local);
 
-    for (int offset = 0; offset <= 1; offset++) {
-      final month = now.month + offset;
-      final year  = now.year + (month > 12 ? 1 : 0);
-      final m     = month > 12 ? month - 12 : month;
+    // Walk forward through upcoming due dates and notify `daysBefore` days
+    // ahead of each — this correctly lands in the previous month when the
+    // bill is due early in the month (e.g. due 2nd, 3 days before → 30th).
+    for (int offset = 0; offset <= 2; offset++) {
+      final first       = DateTime(now.year, now.month + offset);
+      final daysInMonth = DateTime(first.year, first.month + 1, 0).day;
+      final due = DateTime(
+          first.year, first.month, bill.dueDay.clamp(1, daysInMonth));
+      final notify = due.subtract(Duration(days: bill.daysBefore));
 
-      final daysInMonth = DateTime(year, m + 1, 0).day;
-      final day         = notifyDay.clamp(1, daysInMonth);
-
-      final candidate = tz.TZDateTime(tz.local, year, m, day, 9, 0);
+      final candidate = tz.TZDateTime(
+          tz.local, notify.year, notify.month, notify.day, 9, 0);
       if (candidate.isAfter(now)) return candidate;
     }
     return null;

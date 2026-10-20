@@ -9,7 +9,12 @@ import 'app.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();       // ← must be first
   GoogleFonts.config.allowRuntimeFetching = false;
-  await NotificationService.instance.init();
+  try {
+    await NotificationService.instance.init();
+  } catch (e) {
+    // Never block app start-up on notification setup
+    debugPrint('Notification init failed: $e');
+  }
 
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,

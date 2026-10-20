@@ -61,7 +61,7 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
 
   Future<void> _save() async {
     final name = _nameCtrl.text.trim();
-    if (name.isEmpty) return;
+    if (name.isEmpty || _saving) return;
 
     setState(() => _saving = true);
     try {
@@ -84,7 +84,7 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
       });
       HapticFeedback.lightImpact();
     } catch (e) {
-      setState(() => _saving = false);
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -304,12 +304,14 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
             color: AppColors.textPrimary,
           ),
         ),
-        subtitle: wallet.balance > 0
+        subtitle: wallet.balance != 0
             ? Text(
-                // ← was _fmtRp(wallet.balance)
-                'Balance : ${cur.format(wallet.balance)}',
+                'Balance : ${wallet.balance < 0 ? '−' : ''}${cur.format(wallet.balance)}',
                 style: GoogleFonts.dmMono(
-                    fontSize: 11, color: AppColors.textMuted),
+                    fontSize: 11,
+                    color: wallet.balance < 0
+                        ? AppColors.expenseRed
+                        : AppColors.textMuted),
               )
             : null,
         trailing: Row(
@@ -445,6 +447,10 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
           TextField(
             controller: _balanceCtrl,
             keyboardType: TextInputType.number,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(12),
+            ],
             style: GoogleFonts.dmMono(
                 fontSize: 14, color: AppColors.textPrimary),
             decoration: InputDecoration(
@@ -599,18 +605,18 @@ class _EditWalletSheetState extends ConsumerState<_EditWalletSheet> {
 
   Future<void> _save() async {
     final name = _nameCtrl.text.trim();
-    if (name.isEmpty) return;
+    if (name.isEmpty || _saving) return;
     setState(() => _saving = true);
     try {
-      await ref.read(walletRepoProvider).update(
-            widget.wallet.toCompanion(false).copyWith(
-              name: drift.Value(name),
-              icon: drift.Value(_icon),
-            ),
+      // Only touch name/icon so a stale balance can't overwrite the live one
+      await ref.read(walletRepoProvider).updateDetails(
+            widget.wallet.id,
+            name: name,
+            icon: _icon,
           );
       if (mounted) Navigator.of(context).pop();
     } catch (_) {
-      setState(() => _saving = false);
+      if (mounted) setState(() => _saving = false);
     }
   }
 

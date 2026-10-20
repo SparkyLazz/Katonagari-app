@@ -23,6 +23,10 @@ class WalletRepository {
   Future<bool> update(WalletsCompanion entry) =>
       _db.update(_db.wallets).replace(entry);
 
+  Future<void> updateDetails(int id, {required String name, required String icon}) =>
+      (_db.update(_db.wallets)..where((w) => w.id.equals(id)))
+          .write(WalletsCompanion(name: Value(name), icon: Value(icon)));
+
   Future<int> delete(int id) =>
       (_db.delete(_db.wallets)..where((w) => w.id.equals(id))).go();
 
