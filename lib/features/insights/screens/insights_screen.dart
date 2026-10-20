@@ -232,6 +232,14 @@ class _SpendingView extends ConsumerWidget {
     final selectedMonth = ref.watch(selectedMonthProvider);
 
     if (data == null) {
+      // Don't spin forever if the stream failed
+      if (dataAsync.hasError) {
+        return Center(
+          child: Text('Could not load insights',
+              style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13, color: AppColors.textMuted)),
+        );
+      }
       return Center(
         child: CircularProgressIndicator(color: AppColors.accent),
       );

@@ -111,7 +111,7 @@ class _DebtScreenState extends ConsumerState<DebtScreen>
                 loading: () => const Center(
                     child: CircularProgressIndicator()),
                 error: (e, _) => Center(
-                    child: Text('Error: $e',
+                    child: Text('Could not load debts',
                         style: GoogleFonts.plusJakartaSans(
                             color: AppColors.textMuted))),
                 data: (allDebts) {
