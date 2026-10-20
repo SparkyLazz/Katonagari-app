@@ -84,9 +84,8 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
         // Wait for keyboard to fully animate in (~300ms), then
         // scroll exactly so the note field is visible above it.
         Future.delayed(const Duration(milliseconds: 350), () {
-          if (!mounted) return;
           final ctx = _noteFieldKey.currentContext;
-          if (ctx != null) {
+          if (mounted && ctx != null && ctx.mounted) {
             Scrollable.ensureVisible(
               ctx,
               duration: const Duration(milliseconds: 300),

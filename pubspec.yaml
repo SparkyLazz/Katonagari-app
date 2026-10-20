@@ -48,6 +48,7 @@ dependencies:
   share_plus: ^10.0.2
   uuid: ^4.4.2
   pdf: ^3.10.8
+  rxdart: ^0.27.7
 
 flutter_launcher_icons:
   android: true
@@ -61,7 +62,6 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_launcher_icons: ^0.14.1
-  rxdart: ^0.27.7
   flutter_lints: ^4.0.0
   drift_dev: ^2.18.0
   build_runner: ^2.4.11

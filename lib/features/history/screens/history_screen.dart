@@ -8,11 +8,7 @@ import '../../../core/utils/currency_formatter.dart';
 import '../../../core/services/preferences_service.dart';
 import '../../../data/database/app_database.dart';
 import '../../dashboard/screens/dashboard_screen.dart' show TxDetailSheet;
-import 'package:drift/drift.dart' show Value;
 import '../../../core/widgets/month_picker_sheet.dart';
-
-Value<T> drift_value<T>(T? val) =>
-    val != null ? Value(val) : const Value.absent();
 
 String _dateLabel(DateTime d) {
   final now       = DateTime.now();

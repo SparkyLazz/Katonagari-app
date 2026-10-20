@@ -202,10 +202,12 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen> {
             if (mounted) setState(() => _bills.add(bill));
           } else {
             await _svc.updateBill(bill);
-            if (mounted) setState(() {
-              final i = _bills.indexWhere((b) => b.id == bill.id);
-              if (i != -1) _bills[i] = bill;
-            });
+            if (mounted) {
+              setState(() {
+                final i = _bills.indexWhere((b) => b.id == bill.id);
+                if (i != -1) _bills[i] = bill;
+              });
+            }
           }
         },
       ),
