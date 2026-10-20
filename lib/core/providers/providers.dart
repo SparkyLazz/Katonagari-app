@@ -53,6 +53,7 @@ class CategoryStat {
 
 final insightsSpendingProvider =
     StreamProvider<InsightsSpendingData>((ref) {
+  final month = ref.watch(selectedMonthProvider);
   return ref.watch(transactionsProvider.stream).map((items) {
     // Totals
     double income  = 0;
@@ -67,9 +68,13 @@ final insightsSpendingProvider =
     final net         = income - expense;
     final savingsRate = income > 0 ? ((net / income) * 100).round() : 0;
 
-    // Days elapsed this month for averages
+    // Days elapsed in the *selected* month for averages
+    // (full month for past months, today's day for the current one)
     final now          = DateTime.now();
-    final daysElapsed  = now.day;
+    final daysInMonth  = DateTime(month.year, month.month + 1, 0).day;
+    final isCurrent    = month.year == now.year && month.month == now.month;
+    final isFuture     = month.isAfter(DateTime(now.year, now.month));
+    final daysElapsed  = isCurrent ? now.day : (isFuture ? 0 : daysInMonth);
     final avgDaily     = daysElapsed > 0 ? expense / daysElapsed : 0.0;
     final avgWeekly    = avgDaily * 7;
 
@@ -102,8 +107,7 @@ final insightsSpendingProvider =
           b.transaction.amount.compareTo(a.transaction.amount));
     final top3 = expenses.take(3).toList();
 
-    // Daily spending array (31 slots, 0-indexed by day-1)
-    final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
+    // Daily spending array (one slot per day of the selected month)
     final daily = List<int>.filled(daysInMonth, 0);
     for (final i in items.where((t) => t.transaction.type == 'EXPENSE')) {
       final day = i.transaction.date.day - 1;
@@ -181,6 +185,24 @@ final transactionsProvider =
   final repo = ref.watch(transactionRepoProvider);
   return repo.watchWithCategoryByMonth(month.month, month.year);
 });
+
+// ── Today's spending (always the real current day) ──
+final todaySpentProvider = StreamProvider<double>((ref) {
+  final now   = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  return ref
+      .watch(transactionRepoProvider)
+      .watchByMonth(now.month, now.year)
+      .map((txs) => txs
+          .where((t) =>
+              t.type == 'EXPENSE' &&
+              !t.date.isBefore(today) &&
+              t.date.isBefore(today.add(const Duration(days: 1))))
+          .fold(0.0, (sum, t) => sum + t.amount));
+});
+
+// ── Active bottom-nav tab in MainShell ──
+final mainTabProvider = StateProvider<int>((ref) => 0);
 
 // ── Categories stream ──
 final expenseCategoriesProvider = StreamProvider<List<Category>>((ref) {

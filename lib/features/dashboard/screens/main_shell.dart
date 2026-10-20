@@ -52,7 +52,6 @@ class MainShell extends ConsumerStatefulWidget {
 
 class _MainShellState extends ConsumerState<MainShell>
     with SingleTickerProviderStateMixin {
-  int _activeTab = 0;
   late AnimationController _fabCtrl;
 
   @override
@@ -75,7 +74,7 @@ class _MainShellState extends ConsumerState<MainShell>
 
   void _onTabChanged(int index) {
     HapticFeedback.selectionClick();
-    setState(() => _activeTab = index);
+    ref.read(mainTabProvider.notifier).state = index;
   }
 
   void _openMorePicker() {
@@ -86,7 +85,7 @@ class _MainShellState extends ConsumerState<MainShell>
       isScrollControlled: true,
       builder: (_) => _MorePickerSheet(
         tabs:      _allTabs,
-        activeTab: _activeTab,
+        activeTab: ref.read(mainTabProvider),
         onSelect:  (i) {
           Navigator.pop(context);
           _onTabChanged(i);
@@ -174,18 +173,19 @@ class _MainShellState extends ConsumerState<MainShell>
 
   @override
   Widget build(BuildContext context) {
+    final activeTab = ref.watch(mainTabProvider);
     // Determine if the active tab is a "more" tab (index >= _pinnedCount)
-    final isMoreActive = _activeTab >= _pinnedCount;
+    final isMoreActive = activeTab >= _pinnedCount;
 
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: IndexedStack(
-        index: _activeTab,
+        index: activeTab,
         children: _allTabs.map((t) => t.screen).toList(),
       ),
       bottomNavigationBar: _BottomNav(
         tabs:         _allTabs,
-        activeTab:    _activeTab,
+        activeTab:    activeTab,
         isMoreActive: isMoreActive,
         onTabChanged: _onTabChanged,
         onMoreTap:    _openMorePicker,

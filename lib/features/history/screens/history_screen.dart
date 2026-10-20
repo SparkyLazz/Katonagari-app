@@ -563,9 +563,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen>
                       'amount':   item.transaction.type == 'INCOME'
                                       ? item.transaction.amount
                                       : -item.transaction.amount,
-                      'date':     item.transaction.date
-                                      .toIso8601String()
-                                      .split('T')[0],
+                      'date':     item.transaction.date.toIso8601String(),
                       'time':     DateFormat('HH:mm')
                                       .format(item.transaction.date),
                       'note':     item.transaction.note ?? '',
