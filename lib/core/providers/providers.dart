@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/database/app_database.dart';
 import '../../data/repositories/transaction_repository.dart';
@@ -196,6 +197,10 @@ final allTransactionsProvider =
 final todaySpentProvider = StreamProvider<double>((ref) {
   final now   = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
+  // Recompute when the day rolls over while the app stays open
+  final rollover = Timer(
+      today.add(const Duration(days: 1)).difference(now), ref.invalidateSelf);
+  ref.onDispose(rollover.cancel);
   return ref
       .watch(transactionRepoProvider)
       .watchByMonth(now.month, now.year)

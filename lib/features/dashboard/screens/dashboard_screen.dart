@@ -1066,18 +1066,25 @@ class _RealBudgetCardState extends State<_RealBudgetCard>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Text(b.category.icon,
-                      style: const TextStyle(fontSize: 15)),
-                  const SizedBox(width: 8),
-                  Text(b.category.name,
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 13, fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                      )),
-                ],
+              Expanded(
+                child: Row(
+                  children: [
+                    Text(b.category.icon,
+                        style: const TextStyle(fontSize: 15)),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(b.category.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 13, fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          )),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Text('$pct%',
                   style: GoogleFonts.dmMono(
                     fontSize: 11,
