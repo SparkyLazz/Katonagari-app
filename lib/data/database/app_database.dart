@@ -90,7 +90,7 @@ class BudgetWithSpending {
     required this.spent,
   });
 
-  double get pct      => spent / budget.amount;
+  double get pct      => budget.amount > 0 ? spent / budget.amount : 0;
   bool   get isOver   => pct >= 1.0;
   bool   get isWarn   => pct >= 0.8 && !isOver;
   double get remaining => budget.amount - spent;
@@ -126,17 +126,16 @@ class AppDatabase extends _$AppDatabase {
     int? month,
     int? year,
   }) {
-    final txTable  = this.transactions;
-    final catTable = this.categories;
+    final txTable  = transactions;
+    final catTable = categories;
 
     final query = select(txTable).join([
       innerJoin(catTable, catTable.id.equalsExp(txTable.categoryId)),
     ]);
 
     if (month != null && year != null) {
-      final start = DateTime(year, month, 1);
-      final end   = DateTime(year, month + 1, 0, 23, 59, 59);
-      query.where(txTable.date.isBetweenValues(start, end));
+      query.where(txTable.date.isBiggerOrEqualValue(DateTime(year, month)) &
+          txTable.date.isSmallerThanValue(DateTime(year, month + 1)));
     }
 
     query.orderBy([
@@ -157,8 +156,8 @@ class AppDatabase extends _$AppDatabase {
     required int month,
     required int year,
   }) {
-    final start = DateTime(year, month, 1);
-    final end   = DateTime(year, month + 1, 0, 23, 59, 59);
+    final start = DateTime(year, month);
+    final end   = DateTime(year, month + 1);
 
     final budgetStream = (select(budgets).join([
       innerJoin(categories, categories.id.equalsExp(budgets.categoryId)),
@@ -168,7 +167,8 @@ class AppDatabase extends _$AppDatabase {
     final txStream = (select(transactions)
       ..where((t) =>
       t.type.equals('EXPENSE') &
-      t.date.isBetweenValues(start, end)))
+      t.date.isBiggerOrEqualValue(start) &
+      t.date.isSmallerThanValue(end)))
         .watch();
 
     return Rx.combineLatest2(
@@ -210,6 +210,20 @@ class AppDatabase extends _$AppDatabase {
     return (select(debts)
       ..orderBy([(d) => OrderingTerm.desc(d.createdAt)]))
         .watch();
+  }
+
+  // ── Reset ──────────────────────────────────────────────
+  /// Wipes every table and re-seeds the default wallet & categories.
+  Future<void> resetAllData() {
+    return transaction(() async {
+      await delete(budgets).go();
+      await delete(transactions).go();
+      await delete(goals).go();
+      await delete(debts).go();
+      await delete(categories).go();
+      await delete(wallets).go();
+      await _seedDefaults();
+    });
   }
 
   // ── Seed defaults ──────────────────────────────────────

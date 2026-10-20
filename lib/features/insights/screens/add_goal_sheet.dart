@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:drift/drift.dart' as drift;
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/database/app_database.dart';
@@ -61,13 +62,7 @@ class _AddGoalSheetState extends ConsumerState<AddGoalSheet> {
       firstDate:   now,
       lastDate:    DateTime(now.year + 10),
       builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: ColorScheme.dark(
-            primary:   AppColors.accent,
-            surface:   AppColors.surface,
-            onSurface: AppColors.textPrimary,
-          ),
-        ),
+        data: AppTheme.picker(ctx),
         child: child!,
       ),
     );

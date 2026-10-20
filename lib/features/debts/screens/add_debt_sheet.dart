@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:drift/drift.dart' show Value;
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/providers.dart';
 import '../../../data/database/app_database.dart';
 
@@ -18,9 +19,7 @@ class AddDebtSheet extends ConsumerStatefulWidget {
 class _AddDebtSheetState extends ConsumerState<AddDebtSheet> {
   String _type       = 'OWE'; // 'OWE' | 'OWED'
   String _amount     = '';
-  String _personName = '';
   DateTime? _dueDate;
-  String _note       = '';
   bool   _saving     = false;
 
   final _nameCtrl = TextEditingController();
@@ -53,7 +52,9 @@ class _AddDebtSheetState extends ConsumerState<AddDebtSheet> {
       if (key == '⌫') {
         if (_amount.isNotEmpty) _amount = _amount.substring(0, _amount.length - 1);
       } else if (key == '000') {
-        if (_amount.isNotEmpty) _amount += '000';
+        if (_amount.isNotEmpty && _amount.length <= 9) _amount += '000';
+      } else if (key == '0' && _amount.isEmpty) {
+        // Ignore leading zeros
       } else {
         if (_amount.length < 12) _amount += key;
       }
@@ -68,13 +69,7 @@ class _AddDebtSheetState extends ConsumerState<AddDebtSheet> {
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
       builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: ColorScheme.dark(
-            primary:   AppColors.accent,
-            surface:   AppColors.surfaceEl,
-            onSurface: AppColors.textPrimary,
-          ),
-        ),
+        data: AppTheme.picker(ctx),
         child: child!,
       ),
     );
@@ -84,24 +79,28 @@ class _AddDebtSheetState extends ConsumerState<AddDebtSheet> {
   // ── Save ──────────────────────────────────────────────
   Future<void> _save() async {
     final name = _nameCtrl.text.trim();
-    if (_amount.isEmpty || name.isEmpty) return;
+    if (!_canSave || _saving || name.isEmpty) return;
     setState(() => _saving = true);
 
-    await ref.read(debtRepoProvider).add(
-      DebtsCompanion.insert(
-        type:       _type,
-        personName: name,
-        amount:     double.parse(_amount),
-        dueDate:    Value(_dueDate),
-        note:       Value(_noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim()),
-      ),
-    );
-
-    if (mounted) Navigator.pop(context);
+    try {
+      await ref.read(debtRepoProvider).add(
+        DebtsCompanion.insert(
+          type:       _type,
+          personName: name,
+          amount:     double.parse(_amount),
+          dueDate:    Value(_dueDate),
+          note:       Value(_noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim()),
+        ),
+      );
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      debugPrint('Save debt error: $e');
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   bool get _canSave =>
-      _amount.isNotEmpty && _nameCtrl.text.trim().isNotEmpty;
+      (int.tryParse(_amount) ?? 0) > 0 && _nameCtrl.text.trim().isNotEmpty;
 
   @override
   Widget build(BuildContext context) {

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/services/preferences_service.dart';
@@ -83,19 +84,7 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen> {
         context: context,
         initialTime: initial,
         builder: (ctx, child) => Theme(
-          data: Theme.of(ctx).copyWith(
-            colorScheme: ColorScheme.dark(
-              primary:          AppColors.accent,
-              onPrimary:        AppColors.bg,
-              secondary:        AppColors.accent,
-              onSecondary:      AppColors.bg,
-              tertiary:         AppColors.accent,
-              onTertiary:       AppColors.bg,
-              surface:          AppColors.surfaceEl,
-              onSurface:        AppColors.textPrimary,
-              surfaceContainer: AppColors.surface,
-            ),
-          ),
+          data: AppTheme.picker(ctx),
           child: child!,
         ),
       );

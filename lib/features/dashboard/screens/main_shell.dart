@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/providers/providers.dart';
+import '../../../core/utils/currency_formatter.dart';
 import 'dashboard_screen.dart';
 import 'add_transaction_sheet.dart';
 import '../../history/screens/history_screen.dart';
@@ -25,12 +28,12 @@ class _TabDef {
   });
 }
 
-final List<_TabDef> _allTabs = [
-  _TabDef(index: 0, label: 'Home',     icon: Icons.home_rounded,           screen: const DashboardScreen()),
-  _TabDef(index: 1, label: 'History',  icon: Icons.receipt_long_rounded,   screen: const HistoryScreen()),
-  _TabDef(index: 2, label: 'Insights', icon: Icons.bar_chart_rounded,      screen: const InsightsScreen()),
-  _TabDef(index: 3, label: 'Debts',    icon: Icons.handshake_outlined,     screen: const DebtScreen()),
-  _TabDef(index: 4, label: 'Settings', icon: Icons.settings_rounded,       screen: const SettingsScreen()),
+const List<_TabDef> _allTabs = [
+  _TabDef(index: 0, label: 'Home',     icon: Icons.home_rounded,           screen: DashboardScreen()),
+  _TabDef(index: 1, label: 'History',  icon: Icons.receipt_long_rounded,   screen: HistoryScreen()),
+  _TabDef(index: 2, label: 'Insights', icon: Icons.bar_chart_rounded,      screen: InsightsScreen()),
+  _TabDef(index: 3, label: 'Debts',    icon: Icons.handshake_outlined,     screen: DebtScreen()),
+  _TabDef(index: 4, label: 'Settings', icon: Icons.settings_rounded,       screen: SettingsScreen()),
 ];
 
 // First 3 are always pinned in the nav bar.
@@ -40,14 +43,14 @@ const int _pinnedCount = 3;
 // ─────────────────────────────────────────────────────
 //  MainShell
 // ─────────────────────────────────────────────────────
-class MainShell extends StatefulWidget {
+class MainShell extends ConsumerStatefulWidget {
   const MainShell({super.key});
 
   @override
-  State<MainShell> createState() => _MainShellState();
+  ConsumerState<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell>
+class _MainShellState extends ConsumerState<MainShell>
     with SingleTickerProviderStateMixin {
   int _activeTab = 0;
   late AnimationController _fabCtrl;
@@ -94,14 +97,15 @@ class _MainShellState extends State<MainShell>
 
   void _showSavedToast(Map<String, dynamic> data) {
     final isIncome = data['type'] == 'income';
-    final amount = (data['amount'] as double)
-        .toStringAsFixed(0)
-        .replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (m) => '${m[1]}.',
-    );
+    final amount   = data['amount'] as double;
+    final txId     = data['id'] as int?;
+    final walletId = data['walletId'] as int?;
+    final canUndo  = data['isEdit'] != true && txId != null;
+    final cur      = ref.read(currencyProvider);
+    final messenger = ScaffoldMessenger.of(context);
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -130,22 +134,32 @@ class _MainShellState extends State<MainShell>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('Saved!',
+                  Text(data['isEdit'] == true ? 'Updated!' : 'Saved!',
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 13, fontWeight: FontWeight.w600,
                         color: AppColors.textPrimary,
                       )),
                   Text(
-                    '${isIncome ? "+" : "−"}Rp $amount · ${data['catName']}',
+                    '${isIncome ? "+" : "−"}${cur.format(amount)} · ${data['catName']}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.plusJakartaSans(
                         fontSize: 11, color: AppColors.textMuted),
                   ),
                 ],
               ),
             ),
+            if (canUndo)
             TextButton(
-              onPressed: () =>
-                  ScaffoldMessenger.of(context).hideCurrentSnackBar(),
+              onPressed: () async {
+                messenger.hideCurrentSnackBar();
+                // Remove the transaction and reverse its wallet effect
+                await ref.read(transactionRepoProvider).delete(txId);
+                if (walletId != null) {
+                  await ref.read(walletRepoProvider)
+                      .adjustBalance(walletId, isIncome ? -amount : amount);
+                }
+              },
               child: Text('Undo',
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 11, fontWeight: FontWeight.w600,

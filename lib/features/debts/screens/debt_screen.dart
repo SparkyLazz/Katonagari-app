@@ -125,7 +125,11 @@ class _DebtScreenState extends ConsumerState<DebtScreen>
                       .where((d) => !d.isPaid)
                       .fold(0.0, (s, d) => s + d.amount);
 
-                  final activeList = _tab == 'OWE' ? oweList : owedList;
+                  // Unpaid first; paid entries sink to the bottom
+                  final activeList = [
+                    ...(_tab == 'OWE' ? oweList : owedList).where((d) => !d.isPaid),
+                    ...(_tab == 'OWE' ? oweList : owedList).where((d) => d.isPaid),
+                  ];
 
                   return CustomScrollView(
                     slivers: [
@@ -509,12 +513,14 @@ class _DebtCard extends ConsumerWidget {
     final accentDim = isOwe ? AppColors.expenseRedDim : AppColors.incomeGreenDim;
 
     final now      = DateTime.now();
+    final today    = DateTime(now.year, now.month, now.day);
+    // Due today is not overdue yet — only dates before today are.
     final isOverdue = debt.dueDate != null &&
-        debt.dueDate!.isBefore(now) &&
+        debt.dueDate!.isBefore(today) &&
         !isPaid;
     final isDueSoon = debt.dueDate != null &&
         !isOverdue &&
-        debt.dueDate!.isBefore(now.add(const Duration(days: 3))) &&
+        debt.dueDate!.isBefore(today.add(const Duration(days: 3))) &&
         !isPaid;
 
     return AnimatedOpacity(
