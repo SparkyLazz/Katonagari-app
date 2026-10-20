@@ -643,7 +643,7 @@ class _CategorySheetState extends ConsumerState<_CategorySheet> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      setState(() => _show = true);
+      if (mounted) setState(() => _show = true);
     });
   }
 

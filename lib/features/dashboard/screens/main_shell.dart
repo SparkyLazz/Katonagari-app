@@ -356,7 +356,7 @@ class _NavItem extends StatelessWidget {
               child: Icon(
                 tab.icon,
                 size:  20,
-                color: isActive ? AppColors.accent : AppColors.textDim,
+                color: isActive ? AppColors.accent : AppColors.textMuted,
               ),
             ),
             const SizedBox(height: 2),
@@ -365,7 +365,7 @@ class _NavItem extends StatelessWidget {
               style: GoogleFonts.plusJakartaSans(
                 fontSize:   10,
                 fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                color:      isActive ? AppColors.accent : AppColors.textDim,
+                color:      isActive ? AppColors.accent : AppColors.textMuted,
               ),
               child: Text(tab.label),
             ),
@@ -412,7 +412,7 @@ class _MoreButton extends StatelessWidget {
                     ? Icons.grid_view_rounded
                     : Icons.more_horiz_rounded,
                 size:  20,
-                color: isActive ? AppColors.accent : AppColors.textDim,
+                color: isActive ? AppColors.accent : AppColors.textMuted,
               ),
             ),
             const SizedBox(height: 2),
@@ -421,7 +421,7 @@ class _MoreButton extends StatelessWidget {
               style: GoogleFonts.plusJakartaSans(
                 fontSize:   10,
                 fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                color:      isActive ? AppColors.accent : AppColors.textDim,
+                color:      isActive ? AppColors.accent : AppColors.textMuted,
               ),
               child: Text(
                 isActive && activeLabel != null ? activeLabel! : 'More',
@@ -482,7 +482,7 @@ class _MorePickerSheet extends StatelessWidget {
           const SizedBox(height: 4),
           Text('Tap a screen to navigate',
               style: GoogleFonts.plusJakartaSans(
-                  fontSize: 12, color: AppColors.textDim)),
+                  fontSize: 12, color: AppColors.textMuted)),
           const SizedBox(height: 20),
 
           // Grid of overflow tabs
@@ -587,7 +587,7 @@ class _MorePickerSheet extends StatelessWidget {
                           size:  18,
                           color: isActive
                               ? AppColors.accent
-                              : AppColors.textDim,
+                              : AppColors.textMuted,
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -599,7 +599,7 @@ class _MorePickerSheet extends StatelessWidget {
                                 : FontWeight.w500,
                             color: isActive
                                 ? AppColors.accent
-                                : AppColors.textDim,
+                                : AppColors.textMuted,
                           ),
                         ),
                       ],

@@ -1548,7 +1548,11 @@ class _BudgetsViewState extends ConsumerState<_BudgetsView> {
 
         if (_selectedBudget != null)
           _BudgetDetailSheet(
-            budget:  _selectedBudget!,
+            // Use the live entry so spending updates while the sheet is open
+            budget:  budgets
+                    .where((b) => b.budget.id == _selectedBudget!.budget.id)
+                    .firstOrNull ??
+                _selectedBudget!,
             cur:     cur,
             onClose: () => setState(() => _selectedBudget = null),
             onEdit:  () {
@@ -1742,8 +1746,8 @@ class _GoalsView extends ConsumerWidget {
                     ),
                   ],
                 ),
-                child: const Icon(Icons.add_rounded,
-                    color: Colors.white, size: 26),
+                child: Icon(Icons.add_rounded,
+                    color: AppColors.bg, size: 26),
               ),
             ),
           ),
@@ -1876,6 +1880,8 @@ class _GoalCard extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(goal.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.plusJakartaSans(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
@@ -1957,8 +1963,13 @@ class _GoalCard extends ConsumerWidget {
                         await ref.read(goalRepoProvider).delete(goal.id);
                       }
                     },
-                    child: Icon(Icons.delete_outline_rounded,
-                        size: 18, color: AppColors.textDim),
+                    behavior: HitTestBehavior.opaque,
+                    child: Padding(
+                      // Bigger tap target than the bare 18px icon
+                      padding: const EdgeInsets.all(6),
+                      child: Icon(Icons.delete_outline_rounded,
+                          size: 18, color: AppColors.textDim),
+                    ),
                   ),
                 ],
               ),
@@ -2187,7 +2198,7 @@ class _BudgetDetailSheetState extends State<_BudgetDetailSheet> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      setState(() => _show = true);
+      if (mounted) setState(() => _show = true);
     });
   }
 
