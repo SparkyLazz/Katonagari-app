@@ -8,11 +8,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/providers/providers.dart';
-import '../../../core/utils/currency_formatter.dart';
 import '../../../core/services/pdf_report_service.dart';
 import '../../../data/database/app_database.dart';
 
@@ -51,6 +49,7 @@ class _ReportSheetState extends ConsumerState<_ReportSheet> {
 
   // ── Generate ──────────────────────────────────────────────────────────────
   Future<void> _generate() async {
+    if (_loading) return;
     setState(() { _loading = true; _error = null; });
 
     try {
@@ -72,6 +71,8 @@ class _ReportSheetState extends ConsumerState<_ReportSheet> {
           final monthTx = await repo.watchWithCategoryByMonth(m, _year).first;
           txList.addAll(monthTx);
         }
+        // Newest first, consistent with the monthly report
+        txList.sort((a, b) => b.transaction.date.compareTo(a.transaction.date));
         periodLabel = 'Year $_year';
       }
 
@@ -95,7 +96,10 @@ class _ReportSheetState extends ConsumerState<_ReportSheet> {
       Navigator.of(context).pop(); // close sheet before share sheet opens
       await PdfReportService.generate(data);
     } catch (e) {
-      setState(() { _error = 'Something went wrong. Please try again.'; });
+      debugPrint('Report error: $e');
+      if (mounted) {
+        setState(() { _error = 'Something went wrong. Please try again.'; });
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -268,7 +272,14 @@ class _ReportSheetState extends ConsumerState<_ReportSheet> {
               const SizedBox(width: 8),
               _arrowBtn(Icons.chevron_right_rounded,
                   _year < DateTime.now().year
-                      ? () => setState(() => _year++)
+                      ? () => setState(() {
+                          _year++;
+                          // Don't leave a future month selected
+                          final now = DateTime.now();
+                          if (_year == now.year && _month > now.month) {
+                            _month = now.month;
+                          }
+                        })
                       : null),
             ],
           ),
@@ -350,7 +361,14 @@ class _ReportSheetState extends ConsumerState<_ReportSheet> {
               const SizedBox(width: 12),
               _arrowBtn(Icons.chevron_right_rounded,
                   _year < DateTime.now().year
-                      ? () => setState(() => _year++)
+                      ? () => setState(() {
+                          _year++;
+                          // Don't leave a future month selected
+                          final now = DateTime.now();
+                          if (_year == now.year && _month > now.month) {
+                            _month = now.month;
+                          }
+                        })
                       : null),
             ],
           ),
