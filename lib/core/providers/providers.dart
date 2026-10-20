@@ -186,6 +186,12 @@ final transactionsProvider =
   return repo.watchWithCategoryByMonth(month.month, month.year);
 });
 
+// ── All transactions (any month) ──
+final allTransactionsProvider =
+    StreamProvider<List<TransactionWithCategory>>((ref) {
+  return ref.watch(transactionRepoProvider).watchAllWithCategory();
+});
+
 // ── Today's spending (always the real current day) ──
 final todaySpentProvider = StreamProvider<double>((ref) {
   final now   = DateTime.now();

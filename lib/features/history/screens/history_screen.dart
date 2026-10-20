@@ -52,7 +52,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen>
   String? _lastType;
   String? _lastStart;
   String? _lastEnd;
-  int?    _lastTxCount;
+  List<TransactionWithCategory>? _lastAll;
 
   @override
   void dispose() {
@@ -63,42 +63,42 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen>
   List<TransactionWithCategory> _getFiltered(
       List<TransactionWithCategory> all) {
     final query = _searchCtrl.text;
+    // Compare the list by identity: an edit keeps the count the same but
+    // the stream still emits a new list, so a length check would go stale.
     if (_cachedFiltered != null &&
         _lastQuery    == query &&
         _lastType     == _typeFilter &&
         _lastStart    == _dateStart &&
         _lastEnd      == _dateEnd &&
-        _lastTxCount  == all.length) {
+        identical(_lastAll, all)) {
       return _cachedFiltered!;
     }
     _lastQuery   = query;
     _lastType    = _typeFilter;
     _lastStart   = _dateStart;
     _lastEnd     = _dateEnd;
-    _lastTxCount = all.length;
+    _lastAll     = all;
     _cachedFiltered = _filtered(all);
     return _cachedFiltered!;
   }
 
   List<TransactionWithCategory> _filtered(
       List<TransactionWithCategory> all) {
-    return all.take(200).where((item) {
+    final start = _dateStart != null ? DateTime.parse(_dateStart!) : null;
+    final end   = _dateEnd != null
+        ? DateTime.parse(_dateEnd!).add(const Duration(days: 1))
+        : null;
+    final q = _searchCtrl.text.trim().toLowerCase();
+    return all.where((item) {
       final tx = item.transaction;
       if (_typeFilter == 'income'  && tx.type != 'INCOME')  return false;
       if (_typeFilter == 'expense' && tx.type != 'EXPENSE') return false;
-      if (_dateStart != null) {
-        final start = DateTime.parse(_dateStart!);
-        if (tx.date.isBefore(start)) return false;
-      }
-      if (_dateEnd != null) {
-        final end = DateTime.parse(_dateEnd!).add(const Duration(days: 1));
-        if (tx.date.isAfter(end)) return false;
-      }
-      final q = _searchCtrl.text.toLowerCase();
+      if (start != null && tx.date.isBefore(start)) return false;
+      if (end != null && !tx.date.isBefore(end)) return false;
       if (q.isNotEmpty) {
         return item.category.name.toLowerCase().contains(q) ||
             (tx.note ?? '').toLowerCase().contains(q) ||
-            tx.amount.toString().contains(q);
+            tx.amount.toStringAsFixed(0).contains(q);
       }
       return true;
     }).toList();
@@ -180,7 +180,10 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen>
   Widget build(BuildContext context) {
     super.build(context);
 
-    final allAsync = ref.watch(transactionsProvider);
+    // A date range can span several months, so search everything then
+    final allAsync = _dateStart != null
+        ? ref.watch(allTransactionsProvider)
+        : ref.watch(transactionsProvider);
     final cur      = ref.currency; // ← read once, passed down
 
     if (allAsync.hasError) {
@@ -196,7 +199,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen>
                   style: GoogleFonts.dmSerifDisplay(
                       fontSize: 18, color: AppColors.textMuted)),
               const SizedBox(height: 6),
-              Text('Pull to refresh',
+              Text('Please try again later',
                   style: GoogleFonts.plusJakartaSans(
                       fontSize: 13, color: AppColors.textDim)),
             ],
@@ -548,6 +551,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen>
               ),
             ),
             ...items.map((item) => _SwipeableTxRow(
+                  key:      ValueKey(item.transaction.id),
                   item:     item,
                   cur:      cur,
                   onTap:    () => showModalBottomSheet(
@@ -555,6 +559,8 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen>
                     backgroundColor: Colors.transparent,
                     isScrollControlled: true,
                     builder: (_) => TxDetailSheet(tx: {
+                      'id':       item.transaction.id,
+                      'catId':    item.category.id,
                       'icon':     item.category.icon,
                       'name':     item.transaction.note?.isNotEmpty == true
                                       ? item.transaction.note!
@@ -641,6 +647,7 @@ class _SwipeableTxRow extends StatefulWidget {
   final VoidCallback             onDelete;
 
   const _SwipeableTxRow({
+    super.key,
     required this.item,
     required this.cur,
     required this.onTap,
@@ -654,6 +661,7 @@ class _SwipeableTxRow extends StatefulWidget {
 class _SwipeableTxRowState extends State<_SwipeableTxRow> {
   double _offsetX   = 0;
   bool _showConfirm = false;
+  bool _dragging    = false;
 
   @override
   Widget build(BuildContext context) {
@@ -716,39 +724,47 @@ class _SwipeableTxRowState extends State<_SwipeableTxRow> {
                             ),
                           ],
                         )
-                      : const Icon(Icons.delete_outline_rounded,
-                          color: Colors.white, size: 22),
+                      : Icon(Icons.delete_outline_rounded,
+                          color: AppColors.expenseRed, size: 22),
                 ),
               ),
             ),
 
             // Row content
             GestureDetector(
+              onHorizontalDragStart: (_) => setState(() => _dragging = true),
               onHorizontalDragUpdate: (d) {
-                if (d.delta.dx < 0) {
-                  setState(() {
-                    _offsetX = (_offsetX + d.delta.dx).clamp(-100.0, 0.0);
-                  });
-                }
+                setState(() {
+                  _offsetX = (_offsetX + d.delta.dx).clamp(-100.0, 0.0);
+                });
               },
               onHorizontalDragEnd: (_) {
-                if (_offsetX < -60) {
-                  setState(() {
+                setState(() {
+                  _dragging = false;
+                  if (_offsetX < -60) {
                     _showConfirm = true;
                     _offsetX     = -90;
-                  });
-                } else {
-                  setState(() {
+                  } else {
                     _offsetX     = 0;
                     _showConfirm = false;
-                  });
-                }
+                  }
+                });
               },
               onTap: () {
-                if (_offsetX.abs() < 5 && !_showConfirm) widget.onTap();
+                if (_showConfirm) {
+                  setState(() {
+                    _showConfirm = false;
+                    _offsetX     = 0;
+                  });
+                } else if (_offsetX.abs() < 5) {
+                  widget.onTap();
+                }
               },
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
+                // Follow the finger directly while dragging; animate the snap
+                duration: _dragging
+                    ? Duration.zero
+                    : const Duration(milliseconds: 300),
                 curve: Curves.easeOutCubic,
                 transform: Matrix4.translationValues(_offsetX, 0, 0),
                 padding: EdgeInsets.symmetric(
@@ -905,8 +921,16 @@ class _DateRangeSheetState extends State<_DateRangeSheet> {
 
   void _applyCustom() {
     if (_startDate == null || _endDate == null) return;
-    final start = DateTime.parse(_startDate!);
-    final end   = DateTime.parse(_endDate!);
+    var start = DateTime.parse(_startDate!);
+    var end   = DateTime.parse(_endDate!);
+    if (end.isBefore(start)) {
+      final tmp = start;
+      start = end;
+      end   = tmp;
+      final tmpStr = _startDate;
+      _startDate = _endDate;
+      _endDate   = tmpStr;
+    }
     final diff  = end.difference(start).inDays + 1;
     final label =
         '${DateFormat('d MMM').format(start)} → ${DateFormat('d MMM').format(end)} · $diff days';
