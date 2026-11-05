@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,7 +18,58 @@ class KatonagariApp extends ConsumerStatefulWidget {
   ConsumerState<KatonagariApp> createState() => _KatonagariAppState();
 }
 
-class _KatonagariAppState extends ConsumerState<KatonagariApp> {
+class _KatonagariAppState extends ConsumerState<KatonagariApp>
+    with WidgetsBindingObserver {
+  // The real calendar month the app last saw, and a timer for the next
+  // month boundary. Used to move the dashboard to the new month (where the
+  // balance starts again from 0) when the month rolls over while the app is
+  // open or in the background.
+  late DateTime _realMonth = _thisMonth();
+  Timer? _monthTimer;
+
+  static DateTime _thisMonth() {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _armMonthTimer();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _syncMonth();
+      _armMonthTimer(); // timers can fire late after the device slept
+    }
+  }
+
+  void _armMonthTimer() {
+    _monthTimer?.cancel();
+    final now   = DateTime.now();
+    final next  = DateTime(now.year, now.month + 1);
+    final until = next.difference(now) + const Duration(seconds: 1);
+    // Capped at a day: very long timers aren't reliable on every platform,
+    // and re-checking daily is free (_syncMonth is a no-op mid-month).
+    const day = Duration(days: 1);
+    _monthTimer = Timer(until < day ? until : day, () {
+      _syncMonth();
+      _armMonthTimer();
+    });
+  }
+
+  void _syncMonth() {
+    final real = _thisMonth();
+    if (real == _realMonth) return;
+    final selected = ref.read(selectedMonthProvider.notifier);
+    // Only follow the calendar if the user was looking at the current
+    // month; someone deliberately browsing an older month stays there.
+    if (selected.state == _realMonth) selected.state = real;
+    _realMonth = real;
+  }
   // Created once — rebuilding it on every theme/language change would reset
   // navigation back to the splash screen.
   late final GoRouter _router = GoRouter(
@@ -40,6 +92,8 @@ class _KatonagariAppState extends ConsumerState<KatonagariApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _monthTimer?.cancel();
     _router.dispose();
     super.dispose();
   }
