@@ -17,9 +17,14 @@ The name *Katonagari* reflects the app's identity: a personal, grounded approach
 ## ✨ Features
 
 - 📊 **Expense Tracking** — Log and categorize your daily transactions quickly
-- 💼 **Budget Management** — Set monthly budgets per category and monitor your limits
+- 🗓️ **Monthly Balance** — The dashboard balance starts from 0 every month (that month's income minus expenses); account balances keep their running totals
+- 🔁 **Repeating Transactions** — Mark salary, rent or subscriptions as monthly and they're added automatically on their day
+- 💼 **Budget Management** — Set monthly budgets per category, monitor your limits, and copy last month's budgets in one tap
 - 🏦 **Multi-wallet Support** — Manage multiple accounts (cash, bank, e-wallet) in one app
 - 📅 **Transaction History** — View and filter past transactions by date or category
+- 🔔 **Reminders** — Daily logging reminder, weekly summary, and bill reminders a few days before each due date
+- 🎯 **Goals & Debts** — Track savings goals and money you owe or are owed
+- 📄 **PDF Reports** — Export a monthly or yearly summary
 - 🇮🇩 **Indonesian Market Focus** — Designed with local currency (IDR), habits, and financial context in mind
 
 ---
@@ -55,6 +60,14 @@ flutter run
 > ```bash
 > flutter build apk --release
 > ```
+
+### Tests
+
+```bash
+flutter test
+```
+
+The database tests run on an in-memory SQLite, so on Linux they need `libsqlite3-dev` (`sudo apt-get install libsqlite3-dev`). CI runs them on every push.
 
 ---
 
