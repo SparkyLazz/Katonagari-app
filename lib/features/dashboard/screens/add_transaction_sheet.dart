@@ -10,6 +10,8 @@ import '../../../core/providers/providers.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/services/preferences_service.dart';
 import '../../../data/database/app_database.dart';
+import '../../../data/repositories/transaction_repository.dart'
+    show missedOccurrences;
 
 // ── Format helper (display only — no currency symbol) ──
 String _fmtAmount(String raw) {
@@ -27,7 +29,7 @@ String _fmtAmount(String raw) {
 class AddTransactionSheet extends ConsumerStatefulWidget {
   /// Pass an existing tx map to enter edit mode.
   /// Must contain: 'id', 'amount', 'cat', 'catId', 'note',
-  /// 'oneTime', 'walletId', 'date'
+  /// 'oneTime', 'walletId', 'date' (optional: 'recurring', 'repeatDay')
   final Map<String, dynamic>? existingTx;
 
   const AddTransactionSheet({super.key, this.existingTx});
@@ -44,7 +46,8 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
   String   _mode         = 'quick';
   String   _note         = '';
   bool     _isOneTime    = false;
-  final String _recurring = 'none';
+  bool     _repeatMonthly = false;
+  int?     _origRepeatDay;   // stored day of an existing repeating series
   bool     _showMore     = false;
   bool     _saving       = false;
   String?  _saveError;
@@ -52,6 +55,19 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
   DateTime _selectedDate = DateTime.now();
 
   bool get _isEditMode => widget.existingTx != null;
+
+  /// Day of month the series repeats on. Keeps an existing series' day when
+  /// the date still matches it (a "31st" series sitting on 28 Feb stays a
+  /// 31st series); otherwise it follows the chosen date.
+  int get _repeatDay {
+    final orig = _origRepeatDay;
+    if (orig != null) {
+      final d   = _selectedDate;
+      final dim = DateTime(d.year, d.month + 1, 0).day;
+      if (orig.clamp(1, dim) == d.day) return orig;
+    }
+    return _selectedDate.day;
+  }
 
   final _scrollController = ScrollController();
   final _noteFocusNode    = FocusNode();
@@ -73,10 +89,12 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
       _type         = rawAmount > 0 ? 'income' : 'expense';
       _note         = ex['note'] as String? ?? '';
       _isOneTime    = ex['oneTime'] as bool? ?? false;
+      _repeatMonthly = ex['recurring'] as bool? ?? false;
+      _origRepeatDay = ex['repeatDay'] as int?;
       _walletId     = ex['walletId'] as int?;
       _selectedDate = DateTime.parse(ex['date'] as String);
-      // Show the "more" panel if there is a note or it's one-time so user can see it
-      if (_note.isNotEmpty || _isOneTime) _showMore = true;
+      // Show the "more" panel if there is a note or a toggle is on so user can see it
+      if (_note.isNotEmpty || _isOneTime || _repeatMonthly) _showMore = true;
     }
     _noteCtrl.text = _note;
 
@@ -228,7 +246,8 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
           note:        drift.Value(_note.isEmpty ? null : _note),
           date:        drift.Value(_selectedDate),
           isOneTime:   drift.Value(_isOneTime),
-          isRecurring: drift.Value(_recurring != 'none'),
+          isRecurring: drift.Value(_repeatMonthly),
+          repeatDay:   drift.Value(_repeatMonthly ? _repeatDay : null),
         ));
       } else {
         // ── INSERT new transaction ────────────────────────────────────────────
@@ -240,13 +259,24 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
           note:        drift.Value(_note.isEmpty ? null : _note),
           date:        _selectedDate,
           isOneTime:   drift.Value(_isOneTime),
-          isRecurring: drift.Value(_recurring != 'none'),
+          isRecurring: drift.Value(_repeatMonthly),
+          repeatDay:   drift.Value(_repeatMonthly ? _repeatDay : null),
         ));
 
         final delta = _isIncome ? newAmt : -newAmt;
         await ref.read(walletRepoProvider).adjustBalance(walletId, delta);
       }
       });
+
+      // A repeating transaction dated in the past also gets the months it
+      // missed. The save itself already succeeded, so don't fail on this.
+      if (_repeatMonthly) {
+        try {
+          await txRepo.generateRecurring();
+        } catch (e) {
+          debugPrint('Recurring catch-up error: $e');
+        }
+      }
 
       if (mounted) {
         Navigator.of(context).pop({
@@ -260,7 +290,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
           'catIcon':   _catObj!.icon,
           'note':      _note,
           'isOneTime': _isOneTime,
-          'recurring': _recurring,
+          'recurring': _repeatMonthly,
         });
       }
     } catch (e) {
@@ -838,8 +868,94 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
             ],
           ),
         ),
+        const SizedBox(height: 10),
+
+        _buildRepeatToggle(),
         const SizedBox(height: 16),
       ],
+    );
+  }
+
+  // ── Repeat monthly toggle ────────────────────────────────────────────────────
+  Widget _buildRepeatToggle() {
+    final day    = _repeatDay;
+    final missed = _repeatMonthly
+        ? missedOccurrences(_selectedDate, day, DateTime.now())
+        : 0;
+    final suffix = switch (day % 10) {
+      _ when day >= 11 && day <= 13 => 'th',
+      1 => 'st',
+      2 => 'nd',
+      3 => 'rd',
+      _ => 'th',
+    };
+    final subtitle = !_repeatMonthly
+        ? 'Add it again automatically every month'
+        : missed > 0
+            ? 'On the $day$suffix of every month · also adds the $missed '
+                'missed month${missed == 1 ? '' : 's'} since then'
+            : 'Added automatically on the $day$suffix of every month'
+                '${day > 28 ? ' (or the last day of shorter months)' : ''}';
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+            color: _repeatMonthly ? AppColors.accentMuted : AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Repeat every month',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 13, fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    )),
+                Text(subtitle,
+                    style: GoogleFonts.plusJakartaSans(
+                        fontSize: 11,
+                        color: missed > 0
+                            ? AppColors.accent
+                            : AppColors.textMuted)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () => setState(() => _repeatMonthly = !_repeatMonthly),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 42, height: 24,
+              decoration: BoxDecoration(
+                color: _repeatMonthly
+                    ? AppColors.accent
+                    : AppColors.borderStrong,
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: AnimatedAlign(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
+                alignment: _repeatMonthly
+                    ? Alignment.centerRight
+                    : Alignment.centerLeft,
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  width: 20, height: 20,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _repeatMonthly ? AppColors.bg : AppColors.textDim,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

@@ -36,8 +36,14 @@ class Transactions extends Table {
   TextColumn get note => text().nullable()();
   DateTimeColumn get date => dateTime()();
   BoolColumn get isOneTime => boolean().withDefault(const Constant(false))();
+  /// True only on the newest occurrence of a monthly repeating transaction;
+  /// the flag moves to each copy as it is generated.
   BoolColumn get isRecurring => boolean().withDefault(const Constant(false))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  // ── NEW in v4 ──
+  /// Intended day of month (1–31) for repeating transactions, so a series on
+  /// the 31st stays on month-ends instead of drifting after a short month.
+  IntColumn get repeatDay => integer().nullable()();
 }
 
 class Budgets extends Table {
@@ -106,7 +112,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -120,6 +126,9 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 3) {
         await m.createTable($DebtsTable(this));
+      }
+      if (from < 4) {
+        await m.addColumn(transactions, transactions.repeatDay);
       }
     },
   );

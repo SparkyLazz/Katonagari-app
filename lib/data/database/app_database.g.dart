@@ -782,6 +782,12 @@ class $TransactionsTable extends Transactions
       type: DriftSqlType.dateTime,
       requiredDuringInsert: false,
       defaultValue: currentDateAndTime);
+  static const VerificationMeta _repeatDayMeta =
+      const VerificationMeta('repeatDay');
+  @override
+  late final GeneratedColumn<int> repeatDay = GeneratedColumn<int>(
+      'repeat_day', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
   @override
   List<GeneratedColumn> get $columns => [
         id,
@@ -793,7 +799,8 @@ class $TransactionsTable extends Transactions
         date,
         isOneTime,
         isRecurring,
-        createdAt
+        createdAt,
+        repeatDay
       ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -860,6 +867,10 @@ class $TransactionsTable extends Transactions
       context.handle(_createdAtMeta,
           createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
     }
+    if (data.containsKey('repeat_day')) {
+      context.handle(_repeatDayMeta,
+          repeatDay.isAcceptableOrUnknown(data['repeat_day']!, _repeatDayMeta));
+    }
     return context;
   }
 
@@ -889,6 +900,8 @@ class $TransactionsTable extends Transactions
           .read(DriftSqlType.bool, data['${effectivePrefix}is_recurring'])!,
       createdAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+      repeatDay: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}repeat_day']),
     );
   }
 
@@ -907,8 +920,15 @@ class Transaction extends DataClass implements Insertable<Transaction> {
   final String? note;
   final DateTime date;
   final bool isOneTime;
+
+  /// True only on the newest occurrence of a monthly repeating transaction;
+  /// the flag moves to each copy as it is generated.
   final bool isRecurring;
   final DateTime createdAt;
+
+  /// Intended day of month (1–31) for repeating transactions, so a series on
+  /// the 31st stays on month-ends instead of drifting after a short month.
+  final int? repeatDay;
   const Transaction(
       {required this.id,
       required this.walletId,
@@ -919,7 +939,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       required this.date,
       required this.isOneTime,
       required this.isRecurring,
-      required this.createdAt});
+      required this.createdAt,
+      this.repeatDay});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -935,6 +956,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
     map['is_one_time'] = Variable<bool>(isOneTime);
     map['is_recurring'] = Variable<bool>(isRecurring);
     map['created_at'] = Variable<DateTime>(createdAt);
+    if (!nullToAbsent || repeatDay != null) {
+      map['repeat_day'] = Variable<int>(repeatDay);
+    }
     return map;
   }
 
@@ -950,6 +974,9 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       isOneTime: Value(isOneTime),
       isRecurring: Value(isRecurring),
       createdAt: Value(createdAt),
+      repeatDay: repeatDay == null && nullToAbsent
+          ? const Value.absent()
+          : Value(repeatDay),
     );
   }
 
@@ -967,6 +994,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       isOneTime: serializer.fromJson<bool>(json['isOneTime']),
       isRecurring: serializer.fromJson<bool>(json['isRecurring']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      repeatDay: serializer.fromJson<int?>(json['repeatDay']),
     );
   }
   @override
@@ -983,6 +1011,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       'isOneTime': serializer.toJson<bool>(isOneTime),
       'isRecurring': serializer.toJson<bool>(isRecurring),
       'createdAt': serializer.toJson<DateTime>(createdAt),
+      'repeatDay': serializer.toJson<int?>(repeatDay),
     };
   }
 
@@ -996,7 +1025,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           DateTime? date,
           bool? isOneTime,
           bool? isRecurring,
-          DateTime? createdAt}) =>
+          DateTime? createdAt,
+          Value<int?> repeatDay = const Value.absent()}) =>
       Transaction(
         id: id ?? this.id,
         walletId: walletId ?? this.walletId,
@@ -1008,6 +1038,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
         isOneTime: isOneTime ?? this.isOneTime,
         isRecurring: isRecurring ?? this.isRecurring,
         createdAt: createdAt ?? this.createdAt,
+        repeatDay: repeatDay.present ? repeatDay.value : this.repeatDay,
       );
   Transaction copyWithCompanion(TransactionsCompanion data) {
     return Transaction(
@@ -1023,6 +1054,7 @@ class Transaction extends DataClass implements Insertable<Transaction> {
       isRecurring:
           data.isRecurring.present ? data.isRecurring.value : this.isRecurring,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      repeatDay: data.repeatDay.present ? data.repeatDay.value : this.repeatDay,
     );
   }
 
@@ -1038,14 +1070,15 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           ..write('date: $date, ')
           ..write('isOneTime: $isOneTime, ')
           ..write('isRecurring: $isRecurring, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('repeatDay: $repeatDay')
           ..write(')'))
         .toString();
   }
 
   @override
   int get hashCode => Object.hash(id, walletId, categoryId, type, amount, note,
-      date, isOneTime, isRecurring, createdAt);
+      date, isOneTime, isRecurring, createdAt, repeatDay);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1059,7 +1092,8 @@ class Transaction extends DataClass implements Insertable<Transaction> {
           other.date == this.date &&
           other.isOneTime == this.isOneTime &&
           other.isRecurring == this.isRecurring &&
-          other.createdAt == this.createdAt);
+          other.createdAt == this.createdAt &&
+          other.repeatDay == this.repeatDay);
 }
 
 class TransactionsCompanion extends UpdateCompanion<Transaction> {
@@ -1073,6 +1107,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
   final Value<bool> isOneTime;
   final Value<bool> isRecurring;
   final Value<DateTime> createdAt;
+  final Value<int?> repeatDay;
   const TransactionsCompanion({
     this.id = const Value.absent(),
     this.walletId = const Value.absent(),
@@ -1084,6 +1119,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.isOneTime = const Value.absent(),
     this.isRecurring = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.repeatDay = const Value.absent(),
   });
   TransactionsCompanion.insert({
     this.id = const Value.absent(),
@@ -1096,6 +1132,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     this.isOneTime = const Value.absent(),
     this.isRecurring = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.repeatDay = const Value.absent(),
   })  : walletId = Value(walletId),
         categoryId = Value(categoryId),
         type = Value(type),
@@ -1112,6 +1149,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     Expression<bool>? isOneTime,
     Expression<bool>? isRecurring,
     Expression<DateTime>? createdAt,
+    Expression<int>? repeatDay,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1124,6 +1162,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       if (isOneTime != null) 'is_one_time': isOneTime,
       if (isRecurring != null) 'is_recurring': isRecurring,
       if (createdAt != null) 'created_at': createdAt,
+      if (repeatDay != null) 'repeat_day': repeatDay,
     });
   }
 
@@ -1137,7 +1176,8 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       Value<DateTime>? date,
       Value<bool>? isOneTime,
       Value<bool>? isRecurring,
-      Value<DateTime>? createdAt}) {
+      Value<DateTime>? createdAt,
+      Value<int?>? repeatDay}) {
     return TransactionsCompanion(
       id: id ?? this.id,
       walletId: walletId ?? this.walletId,
@@ -1149,6 +1189,7 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
       isOneTime: isOneTime ?? this.isOneTime,
       isRecurring: isRecurring ?? this.isRecurring,
       createdAt: createdAt ?? this.createdAt,
+      repeatDay: repeatDay ?? this.repeatDay,
     );
   }
 
@@ -1185,6 +1226,9 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (repeatDay.present) {
+      map['repeat_day'] = Variable<int>(repeatDay.value);
+    }
     return map;
   }
 
@@ -1200,7 +1244,8 @@ class TransactionsCompanion extends UpdateCompanion<Transaction> {
           ..write('date: $date, ')
           ..write('isOneTime: $isOneTime, ')
           ..write('isRecurring: $isRecurring, ')
-          ..write('createdAt: $createdAt')
+          ..write('createdAt: $createdAt, ')
+          ..write('repeatDay: $repeatDay')
           ..write(')'))
         .toString();
   }
@@ -2974,6 +3019,7 @@ typedef $$TransactionsTableCreateCompanionBuilder = TransactionsCompanion
   Value<bool> isOneTime,
   Value<bool> isRecurring,
   Value<DateTime> createdAt,
+  Value<int?> repeatDay,
 });
 typedef $$TransactionsTableUpdateCompanionBuilder = TransactionsCompanion
     Function({
@@ -2987,6 +3033,7 @@ typedef $$TransactionsTableUpdateCompanionBuilder = TransactionsCompanion
   Value<bool> isOneTime,
   Value<bool> isRecurring,
   Value<DateTime> createdAt,
+  Value<int?> repeatDay,
 });
 
 final class $$TransactionsTableReferences
@@ -3056,6 +3103,9 @@ class $$TransactionsTableFilterComposer
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get repeatDay => $composableBuilder(
+      column: $table.repeatDay, builder: (column) => ColumnFilters(column));
 
   $$WalletsTableFilterComposer get walletId {
     final $$WalletsTableFilterComposer composer = $composerBuilder(
@@ -3131,6 +3181,9 @@ class $$TransactionsTableOrderingComposer
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<int> get repeatDay => $composableBuilder(
+      column: $table.repeatDay, builder: (column) => ColumnOrderings(column));
+
   $$WalletsTableOrderingComposer get walletId {
     final $$WalletsTableOrderingComposer composer = $composerBuilder(
         composer: this,
@@ -3204,6 +3257,9 @@ class $$TransactionsTableAnnotationComposer
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get repeatDay =>
+      $composableBuilder(column: $table.repeatDay, builder: (column) => column);
 
   $$WalletsTableAnnotationComposer get walletId {
     final $$WalletsTableAnnotationComposer composer = $composerBuilder(
@@ -3279,6 +3335,7 @@ class $$TransactionsTableTableManager extends RootTableManager<
             Value<bool> isOneTime = const Value.absent(),
             Value<bool> isRecurring = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
+            Value<int?> repeatDay = const Value.absent(),
           }) =>
               TransactionsCompanion(
             id: id,
@@ -3291,6 +3348,7 @@ class $$TransactionsTableTableManager extends RootTableManager<
             isOneTime: isOneTime,
             isRecurring: isRecurring,
             createdAt: createdAt,
+            repeatDay: repeatDay,
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
@@ -3303,6 +3361,7 @@ class $$TransactionsTableTableManager extends RootTableManager<
             Value<bool> isOneTime = const Value.absent(),
             Value<bool> isRecurring = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
+            Value<int?> repeatDay = const Value.absent(),
           }) =>
               TransactionsCompanion.insert(
             id: id,
@@ -3315,6 +3374,7 @@ class $$TransactionsTableTableManager extends RootTableManager<
             isOneTime: isOneTime,
             isRecurring: isRecurring,
             createdAt: createdAt,
+            repeatDay: repeatDay,
           ),
           withReferenceMapper: (p0) => p0
               .map((e) => (

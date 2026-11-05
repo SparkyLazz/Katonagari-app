@@ -21,9 +21,10 @@ class KatonagariApp extends ConsumerStatefulWidget {
 class _KatonagariAppState extends ConsumerState<KatonagariApp>
     with WidgetsBindingObserver {
   // The real calendar month the app last saw, and a timer for the next
-  // month boundary. Used to move the dashboard to the new month (where the
+  // midnight. Used to move the dashboard to the new month (where the
   // balance starts again from 0) when the month rolls over while the app is
-  // open or in the background.
+  // open or in the background, and to add repeating transactions as they
+  // come due.
   late DateTime _realMonth = _thisMonth();
   Timer? _monthTimer;
 
@@ -37,26 +38,39 @@ class _KatonagariAppState extends ConsumerState<KatonagariApp>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _armMonthTimer();
+    _addDueRecurring();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _syncMonth();
+      _addDueRecurring();
       _armMonthTimer(); // timers can fire late after the device slept
     }
   }
 
+  /// Adds any monthly repeating transactions that have come due.
+  void _addDueRecurring() {
+    ref.read(transactionRepoProvider).generateRecurring().catchError(
+      (Object e) {
+        debugPrint('Recurring transactions failed: $e');
+        return 0;
+      },
+    );
+  }
+
   void _armMonthTimer() {
     _monthTimer?.cancel();
-    final now   = DateTime.now();
-    final next  = DateTime(now.year, now.month + 1);
-    final until = next.difference(now) + const Duration(seconds: 1);
-    // Capped at a day: very long timers aren't reliable on every platform,
-    // and re-checking daily is free (_syncMonth is a no-op mid-month).
-    const day = Duration(days: 1);
-    _monthTimer = Timer(until < day ? until : day, () {
+    // Fire just after the next midnight: that's when repeating transactions
+    // come due, and the month boundary is always a midnight too. (Never more
+    // than a day away, so no very long timers.)
+    final now      = DateTime.now();
+    final midnight = DateTime(now.year, now.month, now.day + 1);
+    _monthTimer = Timer(
+        midnight.difference(now) + const Duration(seconds: 1), () {
       _syncMonth();
+      _addDueRecurring();
       _armMonthTimer();
     });
   }

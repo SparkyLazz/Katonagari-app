@@ -534,6 +534,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                             .format(item.transaction.date),
                         'note':     item.transaction.note ?? '',
                         'oneTime':  item.transaction.isOneTime,
+                        'recurring': item.transaction.isRecurring,
+                        'repeatDay': item.transaction.repeatDay,
                         'walletId': item.transaction.walletId,
                       }),
                     ),
@@ -692,6 +694,7 @@ class TxDetailSheet extends ConsumerWidget {
     final isIncome  = amount > 0;
     final absAmt    = amount.abs();
     final isOneTime = tx['oneTime'] == true;
+    final repeats   = tx['recurring'] == true;
     final date      = DateTime.parse(tx['date'] as String);
     final dateStr   = '${date.day} ${_monthName(date.month)} ${date.year}';
 
@@ -761,6 +764,22 @@ class TxDetailSheet extends ConsumerWidget {
                               borderRadius: BorderRadius.circular(3),
                             ),
                             child: Text('ONE-TIME',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 8, fontWeight: FontWeight.w700,
+                                  color: AppColors.accent,
+                                )),
+                          ),
+                        ],
+                        if (repeats) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 5, vertical: 1),
+                            decoration: BoxDecoration(
+                              color:        AppColors.accentDim,
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                            child: Text('MONTHLY',
                                 style: GoogleFonts.plusJakartaSans(
                                   fontSize: 8, fontWeight: FontWeight.w700,
                                   color: AppColors.accent,
@@ -864,7 +883,11 @@ class TxDetailSheet extends ConsumerWidget {
                         title: Text('Delete transaction?',
                             style: GoogleFonts.dmSerifDisplay(
                                 fontSize: 18, color: AppColors.textPrimary)),
-                        content: Text('This action cannot be undone.',
+                        content: Text(
+                            repeats
+                                ? 'This also stops it repeating every month. '
+                                    'This action cannot be undone.'
+                                : 'This action cannot be undone.',
                             style: GoogleFonts.plusJakartaSans(
                                 fontSize: 13,
                                 color: AppColors.textSecondary)),

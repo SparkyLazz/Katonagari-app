@@ -99,7 +99,11 @@ class _MainShellState extends ConsumerState<MainShell>
     final amount   = data['amount'] as double;
     final txId     = data['id'] as int?;
     final walletId = data['walletId'] as int?;
-    final canUndo  = data['isEdit'] != true && txId != null;
+    // A repeating save may also have added past months, which a plain undo
+    // wouldn't remove, so it's only offered for one-off transactions.
+    final canUndo  = data['isEdit'] != true &&
+        txId != null &&
+        data['recurring'] != true;
     final cur      = ref.read(currencyProvider);
     final messenger = ScaffoldMessenger.of(context);
 

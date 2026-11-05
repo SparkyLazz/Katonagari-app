@@ -577,6 +577,8 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen>
                                       .format(item.transaction.date),
                       'note':     item.transaction.note ?? '',
                       'oneTime':  item.transaction.isOneTime,
+                      'recurring': item.transaction.isRecurring,
+                      'repeatDay': item.transaction.repeatDay,
                       'walletId': item.transaction.walletId,
                     }),
                   ),
