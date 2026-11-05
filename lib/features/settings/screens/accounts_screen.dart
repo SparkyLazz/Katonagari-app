@@ -93,7 +93,21 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
     if (!mounted) return;
 
     if (count > 0) {
-      _showDeleteBlockedDialog(wallet.name, count);
+      _showDeleteBlockedDialog(
+        '"${wallet.name}" has $count transaction${count == 1 ? '' : 's'} '
+        'linked to it. Please delete those transactions first.',
+      );
+      return;
+    }
+
+    // Transactions always need an account; without one, saving silently
+    // does nothing.
+    final walletCount = ref.read(walletProvider).valueOrNull?.length ?? 0;
+    if (walletCount <= 1) {
+      _showDeleteBlockedDialog(
+        'You need at least one account to record transactions. '
+        'Add another account first, or rename this one instead.',
+      );
       return;
     }
 
@@ -134,7 +148,7 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
     }
   }
 
-  void _showDeleteBlockedDialog(String name, int count) {
+  void _showDeleteBlockedDialog(String message) {
     showDialog<void>(
       context: context,
       builder: (_) => AlertDialog(
@@ -144,8 +158,7 @@ class _AccountsScreenState extends ConsumerState<AccountsScreen> {
             style: GoogleFonts.dmSerifDisplay(
                 fontSize: 18, color: AppColors.textPrimary)),
         content: Text(
-          '"$name" has $count transaction${count == 1 ? '' : 's'} linked to it. '
-          'Please delete those transactions first.',
+          message,
           style: GoogleFonts.plusJakartaSans(
               fontSize: 13, color: AppColors.textSecondary),
         ),

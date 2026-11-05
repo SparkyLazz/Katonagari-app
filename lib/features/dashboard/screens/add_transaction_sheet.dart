@@ -47,6 +47,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
   final String _recurring = 'none';
   bool     _showMore     = false;
   bool     _saving       = false;
+  String?  _saveError;
   int?     _walletId;
   DateTime _selectedDate = DateTime.now();
 
@@ -174,6 +175,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
     if (!_canSave || _saving) return;
     HapticFeedback.lightImpact();
     _saving = true;
+    if (_saveError != null) setState(() => _saveError = null);
 
     try {
       int? effectiveWalletId = _walletId;
@@ -183,6 +185,11 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
       }
       if (effectiveWalletId == null || _catObj == null) {
         _saving = false;
+        if (mounted) {
+          setState(() => _saveError = effectiveWalletId == null
+              ? 'No account found. Add one in Settings → Accounts.'
+              : 'Pick a category first.');
+        }
         return;
       }
       final int walletId = effectiveWalletId;
@@ -259,6 +266,9 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
     } catch (e) {
       debugPrint('Save error: $e');
       _saving = false;
+      if (mounted) {
+        setState(() => _saveError = "Couldn't save. Please try again.");
+      }
     }
   }
 
@@ -520,6 +530,15 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
             curve: Curves.easeInOut,
             child: _showMore ? _buildMoreOptions() : const SizedBox.shrink(),
           ),
+
+          if (_saveError != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(_saveError!,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.plusJakartaSans(
+                      fontSize: 12, color: AppColors.expenseRed)),
+            ),
 
           GestureDetector(
             onTap: _onSave,
