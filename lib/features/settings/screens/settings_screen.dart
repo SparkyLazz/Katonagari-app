@@ -684,8 +684,42 @@ class _CategorySheetState extends ConsumerState<_CategorySheet> {
   }
 
   Future<void> _deleteCategory(Category cat) async {
-    final repo = ref.read(categoryRepoProvider);
-    await repo.delete(cat.id);
+    // Deleting moves the category's transactions to "Other" and drops its
+    // budgets, with no undo, so ask first.
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: AppColors.surfaceEl,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Text('Delete "${cat.name}"?',
+            style: GoogleFonts.dmSerifDisplay(
+                fontSize: 18, color: AppColors.textPrimary)),
+        content: Text(
+          'Its transactions will move to "Other" and its budgets will be '
+          'removed.',
+          style: GoogleFonts.plusJakartaSans(
+              fontSize: 13, color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: Text('Cancel',
+                style: GoogleFonts.plusJakartaSans(
+                    fontSize: 13, color: AppColors.textMuted)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: Text('Delete',
+                style: GoogleFonts.plusJakartaSans(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.expenseRed)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await ref.read(categoryRepoProvider).delete(cat.id);
   }
 
   @override
