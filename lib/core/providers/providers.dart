@@ -231,6 +231,13 @@ final budgetsProvider = StreamProvider<List<Budget>>((ref) {
       .watchByMonth(month.month, month.year);
 });
 
+// ── Budgets of the month before the selected one (for "copy last month") ──
+final previousMonthBudgetsProvider = StreamProvider<List<Budget>>((ref) {
+  final month = ref.watch(selectedMonthProvider);
+  final prev  = DateTime(month.year, month.month - 1);
+  return ref.watch(budgetRepoProvider).watchByMonth(prev.month, prev.year);
+});
+
 // ── Wallet stream ──
 final walletProvider = StreamProvider<List<Wallet>>((ref) {
   return ref.watch(walletRepoProvider).watchAll();

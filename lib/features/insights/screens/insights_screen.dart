@@ -1431,6 +1431,8 @@ class _BudgetsViewState extends ConsumerState<_BudgetsView> {
     final budgetCatIds = budgets.map((b) => b.category.id).toSet();
     final noBudgetCats =
     allCats.where((c) => !budgetCatIds.contains(c.id)).toList();
+    final prevBudgets  =
+        ref.watch(previousMonthBudgetsProvider).valueOrNull ?? const <Budget>[];
     final totalBudget  = budgets.fold(0.0, (s, b) => s + b.budget.amount);
     final totalSpent   = budgets.fold(0.0, (s, b) => s + b.spent);
     final totalPct     = totalBudget > 0
@@ -1443,6 +1445,13 @@ class _BudgetsViewState extends ConsumerState<_BudgetsView> {
         ListView(
           padding: const EdgeInsets.fromLTRB(24, 14, 24, 100),
           children: [
+            // New month with no budgets yet: offer last month's in one tap
+            if (budgets.isEmpty &&
+                budgetsAsync.hasValue &&
+                prevBudgets.isNotEmpty) ...[
+              _CopyBudgetsCard(count: prevBudgets.length),
+              const SizedBox(height: 12),
+            ],
             if (budgets.isNotEmpty) ...[
               AnimatedOpacity(
                 opacity:  widget.phase >= 1 ? 1 : 0,
@@ -1563,6 +1572,11 @@ class _BudgetsViewState extends ConsumerState<_BudgetsView> {
                 _selectedBudget!,
             cur:     cur,
             onClose: () => setState(() => _selectedBudget = null),
+            onDelete: () async {
+              final toDelete = _selectedBudget!;
+              setState(() => _selectedBudget = null);
+              await ref.read(budgetRepoProvider).delete(toDelete.budget.id);
+            },
             onEdit:  () {
               final toEdit = _selectedBudget!;
               setState(() => _selectedBudget = null);
@@ -2183,16 +2197,108 @@ class _BudgetCard extends StatelessWidget {
 }
 
 // ── Budget Detail Sheet ───────────────────────────────────────────────────────
+// ── "Copy last month's budgets" card ─────────────────────────────────────────
+class _CopyBudgetsCard extends ConsumerStatefulWidget {
+  final int count;
+  const _CopyBudgetsCard({required this.count});
+
+  @override
+  ConsumerState<_CopyBudgetsCard> createState() => _CopyBudgetsCardState();
+}
+
+class _CopyBudgetsCardState extends ConsumerState<_CopyBudgetsCard> {
+  bool _copying = false;
+
+  Future<void> _copy() async {
+    if (_copying) return;
+    setState(() => _copying = true);
+    final month = ref.read(selectedMonthProvider);
+    try {
+      await ref.read(budgetRepoProvider).copyMonth(
+            from: DateTime(month.year, month.month - 1),
+            to:   month,
+          );
+    } catch (e) {
+      debugPrint('Copy budgets error: $e');
+    } finally {
+      if (mounted) setState(() => _copying = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final month    = ref.watch(selectedMonthProvider);
+    final prevName = DateFormat('MMMM').format(
+        DateTime(month.year, month.month - 1));
+    final n = widget.count;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color:        AppColors.accentDim,
+        borderRadius: BorderRadius.circular(14),
+        border:       Border.all(color: AppColors.accentMuted),
+      ),
+      child: Row(
+        children: [
+          const Text('📋', style: TextStyle(fontSize: 20)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('New month, fresh budgets',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 13, fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    )),
+                const SizedBox(height: 2),
+                Text(
+                    'Reuse the $n budget${n == 1 ? '' : 's'} you set in $prevName',
+                    style: GoogleFonts.plusJakartaSans(
+                        fontSize: 11, color: AppColors.textMuted)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          GestureDetector(
+            onTap: _copy,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color:        AppColors.accent,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: _copying
+                  ? SizedBox(
+                      width: 14, height: 14,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: AppColors.bg))
+                  : Text('Copy',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 11, fontWeight: FontWeight.w700,
+                        color: AppColors.bg,
+                      )),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _BudgetDetailSheet extends StatefulWidget {
   final BudgetWithSpending budget;
   final CurrencyInfo       cur;
   final VoidCallback       onClose;
   final VoidCallback       onEdit;
+  final VoidCallback       onDelete;
   const _BudgetDetailSheet({
     required this.budget,
     required this.cur,
     required this.onClose,
     required this.onEdit,
+    required this.onDelete,
   });
 
   @override
@@ -2208,6 +2314,43 @@ class _BudgetDetailSheetState extends State<_BudgetDetailSheet> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) setState(() => _show = true);
     });
+  }
+
+  Future<void> _confirmDelete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: AppColors.surfaceEl,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18)),
+        title: Text('Remove budget?',
+            style: GoogleFonts.dmSerifDisplay(
+                fontSize: 18, color: AppColors.textPrimary)),
+        content: Text(
+            'The ${widget.budget.category.name} budget for this month will be '
+            'removed. Your transactions are not affected.',
+            style: GoogleFonts.plusJakartaSans(
+                fontSize: 13, color: AppColors.textSecondary)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: Text('Cancel',
+                style: GoogleFonts.plusJakartaSans(
+                    fontSize: 13, color: AppColors.textMuted)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: Text('Remove',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.expenseRed,
+                )),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) widget.onDelete();
   }
 
   @override
@@ -2428,6 +2571,36 @@ class _BudgetDetailSheetState extends State<_BudgetDetailSheet> {
                                 style: GoogleFonts.plusJakartaSans(
                                   fontSize: 11, fontWeight: FontWeight.w600,
                                   color: AppColors.accent,
+                                )),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    GestureDetector(
+                      onTap: _confirmDelete,
+                      child: Container(
+                        width:  double.infinity,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color:        AppColors.expenseRedDim,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                              color: AppColors.expenseRed.withOpacity(0.35)),
+                        ),
+                        alignment: Alignment.center,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.delete_outline_rounded,
+                                size: 13, color: AppColors.expenseRed),
+                            const SizedBox(width: 6),
+                            Text('Remove Budget',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 11, fontWeight: FontWeight.w600,
+                                  color: AppColors.expenseRed,
                                 )),
                           ],
                         ),

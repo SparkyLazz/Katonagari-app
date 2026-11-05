@@ -32,6 +32,13 @@ jobs:
       - name: Analyze
         run: flutter analyze --no-fatal-infos
 
+      # Database tests run on an in-memory SQLite, which needs libsqlite3.so
+      - name: Test
+        run: |
+          dpkg -s libsqlite3-dev >/dev/null 2>&1 || \
+            (sudo apt-get update -qq && sudo apt-get install -y -qq libsqlite3-dev)
+          flutter test
+
       # Optional: sign with your own release key. Add these repository secrets:
       #   KEYSTORE_BASE64 (base64 of the .jks), KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD
       # Without them the APK is signed with the debug key (fine for installing/testing).

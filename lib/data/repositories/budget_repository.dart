@@ -20,6 +20,35 @@ class BudgetRepository {
   Future<int> delete(int id) =>
       (_db.delete(_db.budgets)..where((b) => b.id.equals(id))).go();
 
+  /// Copies every budget of [from] (year/month) into [to], skipping
+  /// categories that already have a budget in [to]. Returns how many
+  /// budgets were created.
+  Future<int> copyMonth({required DateTime from, required DateTime to}) {
+    return _db.transaction(() async {
+      final source = await (_db.select(_db.budgets)
+            ..where((b) =>
+                b.month.equals(from.month) & b.year.equals(from.year)))
+          .get();
+      final existing = await (_db.select(_db.budgets)
+            ..where((b) => b.month.equals(to.month) & b.year.equals(to.year)))
+          .get();
+      final taken = existing.map((b) => b.categoryId).toSet();
+
+      var created = 0;
+      for (final b in source) {
+        if (!taken.add(b.categoryId)) continue;
+        await _db.into(_db.budgets).insert(BudgetsCompanion.insert(
+              categoryId: b.categoryId,
+              amount:     b.amount,
+              month:      to.month,
+              year:       to.year,
+            ));
+        created++;
+      }
+      return created;
+    });
+  }
+
   
   Future<void> upsert({
   required int categoryId,

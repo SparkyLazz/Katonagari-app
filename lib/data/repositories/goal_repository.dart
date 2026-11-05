@@ -17,10 +17,18 @@ class GoalRepository {
       (_db.delete(_db.goals)..where((g) => g.id.equals(id))).go();
 
   /// Top-up: adds [amount] to savedAmount, capped at targetAmount.
-  Future<void> topUp(Goal goal, double amount) async {
-    final newSaved = (goal.savedAmount + amount).clamp(0.0, goal.targetAmount);
-    await update(goal.toCompanion(false).copyWith(
-      savedAmount: Value(newSaved),
-    ));
+  /// Reads the current row instead of trusting [goal], which may be a stale
+  /// snapshot from when the sheet was opened.
+  Future<void> topUp(Goal goal, double amount) {
+    return _db.transaction(() async {
+      final current = await (_db.select(_db.goals)
+            ..where((g) => g.id.equals(goal.id)))
+          .getSingleOrNull();
+      if (current == null) return;
+      final newSaved =
+          (current.savedAmount + amount).clamp(0.0, current.targetAmount);
+      await (_db.update(_db.goals)..where((g) => g.id.equals(goal.id)))
+          .write(GoalsCompanion(savedAmount: Value(newSaved)));
+    });
   }
 }

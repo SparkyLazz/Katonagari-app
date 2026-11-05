@@ -102,6 +102,9 @@ class BudgetWithSpending {
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
+  /// For tests: run against any executor, e.g. `NativeDatabase.memory()`.
+  AppDatabase.forTesting(super.executor);
+
   @override
   int get schemaVersion => 3;
 
