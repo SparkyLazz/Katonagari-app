@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/services/notification_service.dart';
 import '../../../core/providers/providers.dart';
 import '../../../core/services/preferences_service.dart';
 import '../../../data/database/app_database.dart';
@@ -415,7 +416,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
                     fontSize: 20, color: AppColors.textPrimary)),
             const SizedBox(height: 8),
             Text(
-              'This will permanently delete all your transactions, budgets, goals, debts, accounts and categories. This cannot be undone.',
+              'This will permanently delete all your transactions, budgets, goals, debts, accounts, categories and bill reminders. This cannot be undone.',
               textAlign: TextAlign.center,
               style: GoogleFonts.plusJakartaSans(
                   fontSize: 13, color: AppColors.textMuted, height: 1.5),
@@ -474,6 +475,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   Future<void> _resetAppData() async {
     await ref.read(databaseProvider).resetAllData();
+    // Bill reminders live outside the database; without this they'd keep
+    // notifying about bills that were just "deleted".
+    try {
+      await NotificationService.instance.clearBills();
+    } catch (e) {
+      debugPrint('Clearing bill reminders failed: $e');
+    }
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

@@ -403,6 +403,16 @@ class NotificationService {
     }
   }
 
+  /// Removes every bill reminder and its scheduled notifications
+  /// (used by "Reset App Data").
+  Future<void> clearBills() async {
+    for (int i = 0; i < _maxBills; i++) {
+      await _cancelBill(i);
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kBills);
+  }
+
   Future<void> _cancelBill(int index) async {
     await _plugin.cancel(_legacyBillId(index));
     for (int k = 0; k < _billOccurrences; k++) {
