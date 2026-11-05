@@ -153,11 +153,13 @@ class _MainShellState extends ConsumerState<MainShell>
               onPressed: () async {
                 messenger.hideCurrentSnackBar();
                 // Remove the transaction and reverse its wallet effect
-                await ref.read(transactionRepoProvider).delete(txId);
-                if (walletId != null) {
-                  await ref.read(walletRepoProvider)
-                      .adjustBalance(walletId, isIncome ? -amount : amount);
-                }
+                await ref.read(databaseProvider).transaction(() async {
+                  await ref.read(transactionRepoProvider).delete(txId);
+                  if (walletId != null) {
+                    await ref.read(walletRepoProvider)
+                        .adjustBalance(walletId, isIncome ? -amount : amount);
+                  }
+                });
               },
               child: Text('Undo',
                   style: GoogleFonts.plusJakartaSans(

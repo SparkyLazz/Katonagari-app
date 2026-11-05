@@ -114,8 +114,10 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen>
     final tx           = item.transaction;
     final walletRepo   = ref.read(walletRepoProvider);
     final reverseDelta = tx.type == 'INCOME' ? -tx.amount : tx.amount;
-    await walletRepo.adjustBalance(tx.walletId, reverseDelta);
-    await ref.read(transactionRepoProvider).delete(tx.id);
+    await ref.read(databaseProvider).transaction(() async {
+      await walletRepo.adjustBalance(tx.walletId, reverseDelta);
+      await ref.read(transactionRepoProvider).delete(tx.id);
+    });
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

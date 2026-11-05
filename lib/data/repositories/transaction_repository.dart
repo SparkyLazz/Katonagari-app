@@ -50,8 +50,13 @@ Stream<List<TransactionWithCategory>> watchAllWithCategory() {
 }
 
   // ── Update transaction ──
-  Future<bool> update(TransactionsCompanion entry) {
-    return _db.update(_db.transactions).replace(entry);
+  // Writes only the fields present in [entry]; `replace` would reset absent
+  // columns (like createdAt) to their defaults.
+  Future<bool> update(TransactionsCompanion entry) async {
+    final rows = await (_db.update(_db.transactions)
+          ..where((t) => t.id.equals(entry.id.value)))
+        .write(entry);
+    return rows > 0;
   }
 
   // ── Get monthly totals ──

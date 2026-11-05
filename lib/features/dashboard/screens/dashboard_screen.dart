@@ -52,7 +52,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
   void _animateBalance(double target) {
     if (target == _lastBalance) return;
-    final from   = _lastBalance;
+    // Start from what is on screen right now, so a change mid-animation
+    // (e.g. quickly switching months) doesn't jump.
+    final from   = _ctrl.isAnimating ? _balanceAnim.value : _lastBalance;
     _lastBalance = target;
     _balanceAnim = Tween<double>(begin: from, end: target).animate(
       CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic),
@@ -99,25 +101,21 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     super.build(context);
     final txAsync      = ref.watch(transactionsProvider);
     final totalsAsync  = ref.watch(monthlyTotalsProvider);
-    final balanceAsync = ref.watch(totalBalanceProvider);
     final cur          = ref.currency;
-
-    ref.listen<AsyncValue<double>>(
-      totalBalanceProvider,
-          (_, next) => _animateBalance(next.valueOrNull ?? 0.0),
-    );
 
     final transactions = txAsync.valueOrNull ?? <TransactionWithCategory>[];
     final totals       = totalsAsync.valueOrNull ?? {'income': 0.0, 'expense': 0.0};
     final totalIncome  = totals['income']  ?? 0.0;
     final totalExpense = totals['expense'] ?? 0.0;
-    final balance      = balanceAsync.valueOrNull ?? 0.0;
-    if (_lastBalance != balance && !_ctrl.isAnimating) {
+    // Monthly balance: starts from 0 every month (income − expense of the
+    // selected month only), instead of carrying over from previous months.
+    final balance      = totalIncome - totalExpense;
+    if (_lastBalance != balance) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _animateBalance(balance);
       });
     }
-    final isLoading    = txAsync.isLoading || totalsAsync.isLoading || balanceAsync.isLoading;
+    final isLoading    = txAsync.isLoading || totalsAsync.isLoading;
 
     // Independent of the selected month, so browsing history doesn't hide it
     final todaySpent = ref.watch(todaySpentProvider).valueOrNull ?? 0.0;
@@ -296,7 +294,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Total Balance',
+                        Text(
+                            'Balance · ${DateFormat('MMMM yyyy').format(ref.watch(selectedMonthProvider))}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 11, fontWeight: FontWeight.w500,
                               color: AppColors.textMuted, letterSpacing: 0.5,
@@ -893,15 +894,17 @@ class TxDetailSheet extends ConsumerWidget {
                       final wId    = tx['walletId'] as int?;
                       final amt    = (tx['amount'] as double).abs();
 
-                      if (wId != null) {
-                        final delta = isIncome ? -amt : amt;
+                      await ref.read(databaseProvider).transaction(() async {
+                        if (wId != null) {
+                          final delta = isIncome ? -amt : amt;
+                          await ref
+                              .read(walletRepoProvider)
+                              .adjustBalance(wId, delta);
+                        }
                         await ref
-                            .read(walletRepoProvider)
-                            .adjustBalance(wId, delta);
-                      }
-                      await ref
-                          .read(transactionRepoProvider)
-                          .delete(txId);
+                            .read(transactionRepoProvider)
+                            .delete(txId);
+                      });
 
                       if (context.mounted) Navigator.pop(context);
                     }

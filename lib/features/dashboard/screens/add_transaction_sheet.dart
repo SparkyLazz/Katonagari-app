@@ -185,11 +185,15 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
         _saving = false;
         return;
       }
+      final int walletId = effectiveWalletId;
 
       final txRepo  = ref.read(transactionRepoProvider);
       final newAmt  = double.parse(_amount);
       int? newId;
 
+      // Wallet adjustments and the transaction row are written together,
+      // so a failure halfway can't leave the wallet balance out of sync.
+      await ref.read(databaseProvider).transaction(() async {
       if (_isEditMode) {
         // ── UPDATE existing transaction ──────────────────────────────────────
         final ex       = widget.existingTx!;
@@ -205,12 +209,12 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
         }
         // Apply new wallet delta
         final newDelta = _isIncome ? newAmt : -newAmt;
-        await ref.read(walletRepoProvider).adjustBalance(effectiveWalletId, newDelta);
+        await ref.read(walletRepoProvider).adjustBalance(walletId, newDelta);
 
         // Update the transaction row
         await txRepo.update(TransactionsCompanion(
           id:          drift.Value(txId),
-          walletId:    drift.Value(effectiveWalletId),
+          walletId:    drift.Value(walletId),
           categoryId:  drift.Value(_catObj!.id),
           type:        drift.Value(_isIncome ? 'INCOME' : 'EXPENSE'),
           amount:      drift.Value(newAmt),
@@ -222,7 +226,7 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
       } else {
         // ── INSERT new transaction ────────────────────────────────────────────
         newId = await txRepo.add(TransactionsCompanion.insert(
-          walletId:    effectiveWalletId,
+          walletId:    walletId,
           categoryId:  _catObj!.id,
           type:        _isIncome ? 'INCOME' : 'EXPENSE',
           amount:      newAmt,
@@ -233,13 +237,14 @@ class _AddTransactionSheetState extends ConsumerState<AddTransactionSheet> {
         ));
 
         final delta = _isIncome ? newAmt : -newAmt;
-        await ref.read(walletRepoProvider).adjustBalance(effectiveWalletId, delta);
+        await ref.read(walletRepoProvider).adjustBalance(walletId, delta);
       }
+      });
 
       if (mounted) {
         Navigator.of(context).pop({
           'id':        newId,
-          'walletId':  effectiveWalletId,
+          'walletId':  walletId,
           'isEdit':    _isEditMode,
           'type':      _type,
           'amount':    newAmt,
