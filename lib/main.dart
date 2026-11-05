@@ -11,6 +11,10 @@ void main() async {
   GoogleFonts.config.allowRuntimeFetching = false;
   try {
     await NotificationService.instance.init();
+    // Top up the rolling window of bill reminders (not awaited: never
+    // delay start-up for it)
+    NotificationService.instance.rescheduleAllBills().catchError(
+        (Object e) => debugPrint('Bill reminder refresh failed: $e'));
   } catch (e) {
     // Never block app start-up on notification setup
     debugPrint('Notification init failed: $e');

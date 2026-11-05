@@ -26,9 +26,10 @@ class DebtRepository {
       (_db.delete(_db.debts)..where((d) => d.id.equals(id))).go();
 
   /// Toggle isPaid on a debt.
+  /// Only the isPaid column is written, so a stale [debt] snapshot can't
+  /// overwrite newer data in the row.
   Future<void> markPaid(Debt debt, {bool paid = true}) async {
-    await update(
-      debt.toCompanion(false).copyWith(isPaid: Value(paid)),
-    );
+    await (_db.update(_db.debts)..where((d) => d.id.equals(debt.id)))
+        .write(DebtsCompanion(isPaid: Value(paid)));
   }
 }

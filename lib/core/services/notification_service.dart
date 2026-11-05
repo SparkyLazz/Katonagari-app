@@ -6,6 +6,7 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'package:intl/intl.dart';
 import '../utils/currency_formatter.dart';
 import 'preferences_service.dart';
 
@@ -71,6 +72,32 @@ class BillReminder {
 }
 
 // ─────────────────────────────────────────────────────────
+//  Bill reminder dates (pure, so it can be unit-tested)
+// ─────────────────────────────────────────────────────────
+typedef BillReminderDate = ({DateTime due, DateTime notify});
+
+/// The next [count] reminders for a bill due on [dueDay] of every month,
+/// notifying [daysBefore] days ahead at 09:00. A due day past the end of a
+/// short month falls on its last day (31st → 30 Apr, 28/29 Feb).
+List<BillReminderDate> upcomingBillReminders({
+  required int dueDay,
+  required int daysBefore,
+  required DateTime now,
+  required int count,
+}) {
+  final result = <BillReminderDate>[];
+  for (int offset = 0; result.length < count && offset <= count + 1; offset++) {
+    final first       = DateTime(now.year, now.month + offset);
+    final daysInMonth = DateTime(first.year, first.month + 1, 0).day;
+    final due = DateTime(first.year, first.month, dueDay.clamp(1, daysInMonth));
+    // Calendar-day arithmetic (not Duration) so DST changes can't shift it
+    final notify = DateTime(due.year, due.month, due.day - daysBefore, 9);
+    if (notify.isAfter(now)) result.add((due: due, notify: notify));
+  }
+  return result;
+}
+
+// ─────────────────────────────────────────────────────────
 //  NotificationService
 // ─────────────────────────────────────────────────────────
 class NotificationService {
@@ -92,7 +119,18 @@ class NotificationService {
   // Notification IDs
   static const int _idDaily  = 1;
   static const int _idWeekly = 2;
-  static int _billId(int index) => 1000 + index;
+
+  // Each bill gets its next [_billOccurrences] reminders scheduled as
+  // one-shot notifications (re-filled on every app start). A monthly repeat
+  // on a fixed day-of-month can't express "N days before the due date":
+  // e.g. due on the 1st, 1 day before → the 31st, which doesn't exist in
+  // 30-day months, so those reminders were silently skipped.
+  static const int _billOccurrences = 4;
+  static const int _maxBills        = 50;
+  static int _billId(int index, int occurrence) =>
+      2000 + index * _billOccurrences + occurrence;
+  // Pre-fix scheme used one repeating notification per bill at 1000 + index
+  static int _legacyBillId(int index) => 1000 + index;
 
   // ── Init ─────────────────────────────────────────────
   static const _tzChannel = MethodChannel('katonagari/timezone');
@@ -327,90 +365,78 @@ class NotificationService {
     final bills = await getBills();
     bills.add(bill);
     await saveBills(bills);
-    if (bill.isActive) await _scheduleBillNotification(bill, bills.length - 1);
+    if (bill.isActive) await _scheduleBillNotifications(bill, bills.length - 1);
   }
 
   Future<void> updateBill(BillReminder bill) async {
     final bills = await getBills();
     final idx   = bills.indexWhere((b) => b.id == bill.id);
     if (idx == -1) return;
-    await _plugin.cancel(_billId(idx));
+    await _cancelBill(idx);
     bills[idx] = bill;
     await saveBills(bills);
-    if (bill.isActive) await _scheduleBillNotification(bill, idx);
+    if (bill.isActive) await _scheduleBillNotifications(bill, idx);
   }
 
   Future<void> deleteBill(String id) async {
     final bills = await getBills();
     final idx   = bills.indexWhere((b) => b.id == id);
     if (idx == -1) return;
-    await _plugin.cancel(_billId(idx));
+    await _cancelBill(idx);
     bills.removeAt(idx);
     await saveBills(bills);
     await rescheduleAllBills();
   }
 
+  /// Cancels every pending bill reminder and schedules the upcoming ones
+  /// again. Called on app start so the rolling window of one-shot reminders
+  /// keeps being topped up.
   Future<void> rescheduleAllBills() async {
-    for (int i = 0; i < 50; i++) {
-      await _plugin.cancel(_billId(i));
+    for (int i = 0; i < _maxBills; i++) {
+      await _cancelBill(i);
     }
     final bills = await getBills();
-    for (int i = 0; i < bills.length; i++) {
+    for (int i = 0; i < bills.length && i < _maxBills; i++) {
       if (bills[i].isActive) {
-        await _scheduleBillNotification(bills[i], i);
+        await _scheduleBillNotifications(bills[i], i);
       }
     }
   }
 
-  Future<void> _scheduleBillNotification(
-      BillReminder bill, int index) async {
-    final notifyDate = _nextBillNotifyDate(bill);
-    if (notifyDate == null) return;
+  Future<void> _cancelBill(int index) async {
+    await _plugin.cancel(_legacyBillId(index));
+    for (int k = 0; k < _billOccurrences; k++) {
+      await _plugin.cancel(_billId(index, k));
+    }
+  }
 
+  Future<void> _scheduleBillNotifications(
+      BillReminder bill, int index) async {
+    if (index >= _maxBills) return;
     final cur = PreferencesService.currencyByCode(
         await PreferencesService.instance.getCurrencyCode());
     final fmtAmount = cur.format(bill.amount);
+    final days      = bill.daysBefore;
 
-    await _plugin.zonedSchedule(
-      _billId(index),
-      '${bill.icon} ${bill.name} due in ${bill.daysBefore} day${bill.daysBefore == 1 ? '' : 's'}',
-      '$fmtAmount · Due on the ${_ordinal(bill.dueDay)}.',
-      notifyDate,
-      _details,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      matchDateTimeComponents: DateTimeComponents.dayOfMonthAndTime,
+    final upcoming = upcomingBillReminders(
+      dueDay:     bill.dueDay,
+      daysBefore: days,
+      now:        tz.TZDateTime.now(tz.local),
+      count:      _billOccurrences,
     );
-  }
-
-  tz.TZDateTime? _nextBillNotifyDate(BillReminder bill) {
-    final now = tz.TZDateTime.now(tz.local);
-
-    // Walk forward through upcoming due dates and notify `daysBefore` days
-    // ahead of each — this correctly lands in the previous month when the
-    // bill is due early in the month (e.g. due 2nd, 3 days before → 30th).
-    for (int offset = 0; offset <= 2; offset++) {
-      final first       = DateTime(now.year, now.month + offset);
-      final daysInMonth = DateTime(first.year, first.month + 1, 0).day;
-      final due = DateTime(
-          first.year, first.month, bill.dueDay.clamp(1, daysInMonth));
-      final notify = due.subtract(Duration(days: bill.daysBefore));
-
-      final candidate = tz.TZDateTime(
-          tz.local, notify.year, notify.month, notify.day, 9, 0);
-      if (candidate.isAfter(now)) return candidate;
-    }
-    return null;
-  }
-
-  String _ordinal(int n) {
-    if (n >= 11 && n <= 13) return '${n}th';
-    switch (n % 10) {
-      case 1: return '${n}st';
-      case 2: return '${n}nd';
-      case 3: return '${n}rd';
-      default: return '${n}th';
+    for (int k = 0; k < upcoming.length; k++) {
+      final r = upcoming[k];
+      await _plugin.zonedSchedule(
+        _billId(index, k),
+        '${bill.icon} ${bill.name} due in $days day${days == 1 ? '' : 's'}',
+        '$fmtAmount · Due ${DateFormat('EEE, d MMM').format(r.due)}.',
+        tz.TZDateTime(tz.local, r.notify.year, r.notify.month,
+            r.notify.day, 9, 0),
+        _details,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+      );
     }
   }
 
